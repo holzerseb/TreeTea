@@ -150,20 +150,15 @@ namespace TreeTea
             this.treeTea.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
             | System.Windows.Forms.AnchorStyles.Left) 
             | System.Windows.Forms.AnchorStyles.Right)));
-            this.treeTea.CheckBoxes = true;
             this.treeTea.ImageIndex = 0;
             this.treeTea.ImageList = this.imageList1;
-            this.treeTea.IsDoubleBufferingEnabled = false;
             this.treeTea.Location = new System.Drawing.Point(12, 12);
             this.treeTea.Name = "treeTea";
             treeNode1.Name = "Node16";
-            treeNode1.StateImageIndex = 0;
             treeNode1.Text = "Node16";
             treeNode2.Name = "Node17";
-            treeNode2.StateImageIndex = 0;
             treeNode2.Text = "Node17";
             treeNode3.Name = "Node4";
-            treeNode3.StateImageIndex = 0;
             treeNode3.Text = "Node4";
             treeNode4.Name = "Node18";
             treeNode4.StateImageIndex = 0;
@@ -185,7 +180,6 @@ namespace TreeTea
             treeNode9.Text = "Node6";
             treeNode10.ImageIndex = -2;
             treeNode10.Name = "Node0";
-            treeNode10.StateImageIndex = 0;
             treeNode10.Text = "Node0";
             treeNode11.Name = "Node22";
             treeNode11.StateImageIndex = 0;

@@ -47,8 +47,6 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="src\Commons.cs" />
-    <Compile Include="src\TreeTeaNode.cs" />
-    <Compile Include="src\TreeTeaNodeCollection.cs" />
     <Compile Include="src\TreeTeaView.cs">
       <SubType>Component</SubType>
     </Compile>

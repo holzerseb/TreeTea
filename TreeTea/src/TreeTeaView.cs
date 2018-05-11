@@ -32,6 +32,7 @@ namespace TreeTea
         /// Used to handle thrown exception; if this is null, the exception will be simply thrown
         /// </summary>
         Action<Exception> exceptionHandler;
+        bool isCheckBoxesEnabled;
 
         /* Constructor */
         /// <summary>
@@ -41,6 +42,8 @@ namespace TreeTea
         {
             /*Property Default Values*/
             SelectNodeOnImageClick = true;
+            EnableDoubleBuffering = true;
+            SupressCheckboxDoubleClick = true;
             IsMultiSelectionEnabled = true;
             IsTriStateEnabled = true;
 
@@ -50,6 +53,7 @@ namespace TreeTea
             exceptionHandler = null;
             base.SelectedNode = null;
             this.StateImageList = GenerateCheckboxImageList();
+            this.isCheckBoxesEnabled = false; //gets overwritten when the user sets the property, but we need this though...
 
             /* Debug Stuff */
             InitializeDebugInstance(); //is called only in debug mode - TODO: Remove this if the whole thing goes public, because we don't know if others want to adapt our debug configuration
@@ -75,7 +79,7 @@ namespace TreeTea
         /// <summary>
         /// Defines, whether a click on the Image (by StateImageIndex) will also select the node
         /// </summary>
-        [Category("TreeTea Multi-Selection")]
+        [Category("TreeTea General Configuration")]
         [Description("Defines, whether a click on the Image(by StateImageIndex) will also select the node")]
         [DefaultValue(true)]
         public bool SelectNodeOnImageClick { get; set; }
@@ -86,10 +90,22 @@ namespace TreeTea
         /// <remarks><para>Flickering can sometimes occur, because the control gets repainted - I haven't found the exact reasons WHEN this does occur,
         /// but in case it does, DoubleBuffering will cause the repaint to be done in a seperate frame, while the old one remains to be shown</para>
         /// <para>This will not speed up the painting, nor will it delay it - it simply elimates the visible painting artifacts</para></remarks>
-        [Category("TreeTea Multi-Selection")]
+        [Category("TreeTea General Configuration")]
         [Description("Enable this, if the TreeView is flickering. This will not speed up the painting, nor will it delay it - it simply elimates the visible painting artifacts")]
         [DefaultValue(true)]
-        public bool IsDoubleBufferingEnabled { get; set; }
+        public bool EnableDoubleBuffering { get; set; }
+
+        /// <summary>
+        /// <para>Enable this, to prevent the Nodes to expand/collapse by a double-click onto the checkboxes.</para>
+        /// <para>This will not block the double-click to expand/collapse functionality when double-clicked onto the label</para>
+        /// </summary>
+        /// <remarks><para>This may be required/wanted, because our checkboxes are self-drawn and used in the stateimage
+        /// resulting in double clicks on the checkbox to be used as if you have double clicked the label.</para>
+        /// <para>This will not block the double-click to expand/collapse functionality when double-clicked onto the label</para></remarks>
+        [Category("TreeTea General Configuration")]
+        [Description("Enable this, to prevent the Nodes to expand/collapse by a double-click onto the checkboxes. This will affect double-clicks onto the node-label.")]
+        [DefaultValue(true)]
+        public bool SupressCheckboxDoubleClick { get; set; }
 
         /// <summary>
         /// Function to handle the exceptions. If this is null, the exception will be thrown
@@ -470,12 +486,21 @@ namespace TreeTea
         /// Gets or sets a value indicating whether check boxes are displayed next to the
         /// tree nodes in the tree view control.
         /// </summary>
-        /// <remarks>This was overwritten, because we have to completly alter the default Checkboxes -> We never use the default ones,
+        /// <remarks>This was overwritten, because we have to completely alter the default Checkboxes -> We never use the default ones,
         /// but instead we use "self-drawn" images in the stateimage of the nodes to simulate checkboxes</remarks>
         [Category("TreeTea TriState")]
         [Description("Gets or sets a value indicating whether check boxes are displayed next to the tree nodes in the tree view control")]
         [DefaultValue(false)]
-        new public bool CheckBoxes { get; set; }
+        new public bool CheckBoxes
+        {
+            get => isCheckBoxesEnabled;
+            set
+            {
+                isCheckBoxesEnabled = value;
+                if (value) ShowAllCheckboxes();
+                else HideAllCheckboxes();
+            }
+        }
 
         /// <summary>
         /// <para>Defines whether mixed nodes are Checked=true or Checked=false</para>
@@ -494,6 +519,9 @@ namespace TreeTea
         {
             base.OnCreateControl();
             base.CheckBoxes = false; //default checkboxes have to be disabled by any chance; see this.Checkbox remarks
+            //and depending on user-configuration, either show or hide checkboxes
+            if (this.CheckBoxes) ShowAllCheckboxes();
+            else HideAllCheckboxes();
 
             //We initialize all node
             checkedChangedSemaphore++;
@@ -507,7 +535,8 @@ namespace TreeTea
             base.OnBeforeExpand(e);
 
             //Some Developers tend to use LoD (Load on Demand) Nodes, so we ensure that the checkboxes are visible correctly
-            ShowCheckbox(e.Node, CheckBoxes);
+            if (this.CheckBoxes) ShowCheckbox(e.Node, CheckBoxes);
+            else HideCheckbox(e.Node, CheckBoxes);
         }
 
         protected override void OnAfterExpand(TreeViewEventArgs e)
@@ -526,7 +555,9 @@ namespace TreeTea
         {
             base.OnAfterCheck(e);
 
-            if (checkedChangedSemaphore > 0)
+            //if a checked changed process is already ongoing, prevent further changes
+            //also prevent any changes, if the user didn't enable checkboxes in first place
+            if (checkedChangedSemaphore > 0 || !this.CheckBoxes)
                 return;
             checkedChangedSemaphore++;
 
@@ -652,7 +683,7 @@ namespace TreeTea
             {
                 foreach (var node in nodes)
                 {
-                    node.StateImageIndex = -1;
+                    node.StateImageIndex = (int)CheckedState.Uninitialised;
 
                     if (hideCheckboxesOfChildren)
                         HideCheckbox(node.Nodes.Cast<TreeNode>(), hideCheckboxesOfChildren);
@@ -670,7 +701,7 @@ namespace TreeTea
         public void HideAllCheckboxes()
         {
             if (this.Nodes.Count == 0) return;
-            HideCheckbox(this.Nodes);
+            HideCheckbox(this.Nodes, true);
         }
 
         #endregion
@@ -750,7 +781,7 @@ namespace TreeTea
                 foreach (var node in nodes)
                 {
                     if (node.StateImageIndex == (int)CheckedState.Uninitialised)
-                        node.StateImageIndex = 0; //todo: should this somehow be initialized with Checked.Mixed, Checked.Checked, Checked.Unchecked?
+                        node.StateImageIndex = (int)CheckedState.Unchecked; //todo: should this somehow be initialized with Checked.Mixed, Checked.Checked, Checked.Unchecked?
 
                     if (showCheckboxesOfChildren)
                         ShowCheckbox(node.Nodes.Cast<TreeNode>(), showCheckboxesOfChildren);
@@ -768,7 +799,7 @@ namespace TreeTea
         public void ShowAllCheckboxes()
         {
             if (this.Nodes.Count == 0) return;
-            ShowCheckbox(this.Nodes);
+            ShowCheckbox(this.Nodes, true);
         }
 
         #endregion
@@ -863,8 +894,7 @@ namespace TreeTea
         {
             foreach (TreeNode node in nodes)
             {
-                node.StateImageIndex = (int)setState;
-                node.Checked = (setState == CheckedState.Checked || setState == CheckedState.Mixed);
+                SetCheckedState(node, setState);
 
                 //Inform everyone that this nodes checkedstate has changed
                 AfterCheck?.Invoke(this, new CheckedStateChangedEventArgs(node, (CheckedState)node.StateImageIndex));
@@ -882,6 +912,9 @@ namespace TreeTea
         /// resulting the node.Checked Property overwriting the stateimageindex</remarks>
         protected void SetCheckedState(TreeNode node, CheckedState checkedState)
         {
+            //if the user has disabled the Checkboxes in first place, we ain't doin nothin here, brah
+            if (!this.CheckBoxes) return;
+
             switch (checkedState)
             {
                 case CheckedState.Unchecked:
@@ -945,13 +978,49 @@ namespace TreeTea
 
         #endregion
 
-        #region Helper
+        #region Altering TreeViews Behaviour
 
+        /// <summary>
+        /// Gets the required creation parameters when the control handle is created.
+        /// </summary>
+        /// <remarks>This is currently used to enable Double Buffering</remarks>
+        protected override CreateParams CreateParams
+        {
+            //See "Extended Window Styles": https://msdn.microsoft.com/en-us/library/windows/desktop/ff700543(v=vs.85).aspx
+            //Note to my future self: Ensure that the window doesn't use CS_OWNDC or CS_CLASSDC
+            get
+            {
+                CreateParams cp = base.CreateParams;
+                if (EnableDoubleBuffering)
+                    cp.ExStyle |= 0x02000000;  // Turn on WS_EX_COMPOSITED
+                return cp;
+            }
+        }
 
+        /// <summary>
+        /// Supresses the doubleclick on the stateimageindex (our self-drawn checkboxes) to prevent
+        /// collapsing/expanding the node on doubleclick on the checkbox
+        /// </summary>
+        /// <param name="m"></param>
+        protected override void WndProc(ref System.Windows.Forms.Message m)
+        {
+            // Suppress WM_LBUTTONDBLCLK on Checkboxes
+            if (SupressCheckboxDoubleClick && m.Msg == 0x203)
+            {
+                System.Windows.Forms.TreeViewHitTestInfo tvhti = HitTest(new System.Drawing.Point((int)m.LParam));
+                if (tvhti != null && tvhti.Location == System.Windows.Forms.TreeViewHitTestLocations.StateImage)
+                {
+                    m.Result = System.IntPtr.Zero;
+                    return;
+                }
+            }
+
+            base.WndProc(ref m);
+        }
 
         #endregion
 
-        #region yet unsorted stuff
+        #region Helping Methods
 
         /// <summary>
         /// Handler for Exceptions - if the exceptionHandler is set, that one is used,
@@ -985,28 +1054,11 @@ namespace TreeTea
             });
         }
 
-        /// <summary>
-        /// Gets the required creation parameters when the control handle is created.
-        /// </summary>
-        /// <remarks>This is currently used to enable Double Buffering</remarks>
-        protected override CreateParams CreateParams
-        {
-            //See "Extended Window Styles": https://msdn.microsoft.com/en-us/library/windows/desktop/ff700543(v=vs.85).aspx
-            //Note to my future self: Ensure that the window doesn't use CS_OWNDC or CS_CLASSDC
-            get
-            {
-                CreateParams cp = base.CreateParams;
-                if (IsDoubleBufferingEnabled)
-                    cp.ExStyle |= 0x02000000;  // Turn on WS_EX_COMPOSITED
-                return cp;
-            }
-        }
-
         #endregion
 
         #region Testings
 
-        public void Test()
+        public void MahTestArea()
         {
 
         }

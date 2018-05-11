@@ -24,6 +24,8 @@ namespace TreeTea
 
         private void button1_Click(object sender, EventArgs e)
         {
+            treeTea.CheckBoxes = !treeTea.CheckBoxes;
+
             //treeTea.AfterCheck += TreeTea_AfterCheck;
 
             //treeTea.MixedNodesMode = TreeTeaView.MixedStateMode.Automatic;
