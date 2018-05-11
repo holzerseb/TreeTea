@@ -70,6 +70,7 @@ namespace TreeTea
 
         #endregion
 
+
         #region General Properties
 
         /* Member and Properties regarding the node selection can be found in Region "MultiSelection | Node Selection Handling" */
@@ -116,7 +117,68 @@ namespace TreeTea
 
         #endregion
 
+
         #region MultiSelection | Node Selection Handling
+
+        /* Due to some handling issues with the base.SelectedNode,
+         * we completly override the default behaviour and handle the selected nodes ourself */
+         
+        private TreeNode selectedNode;
+        /// <summary>
+        /// Property for the current (node set most recently) node
+        /// </summary>
+        public new TreeNode SelectedNode
+        {
+            get { return selectedNode; }
+            set
+            {
+                ClearSelection();
+
+                if (value == null)
+                    return;
+
+                SelectNode(value);
+            }
+        }
+
+        private List<TreeNode> selectedNodes;
+        /// <summary>
+        /// Property for all selected nodes
+        /// </summary>
+        public IEnumerable<TreeNode> SelectedNodes
+        {
+            get { return selectedNodes; }
+            set
+            {
+                ClearSelection();
+
+                if (value == null)
+                    return;
+
+                if (IsMultiSelectionEnabled)
+                {
+                    foreach (var node in value)
+                        ToggleNode(node, true);
+                }
+                else
+                {
+                    try
+                    {
+                        if (value.Count() > 1)
+                            throw new Exception("There was an attempt to select multiple nodes, but MultiSelection is disabled. The current selection-state has not been modified.");
+
+                        if (value.Count() == 1)
+                            ToggleNode(value.First(), true);
+                        //else  //this else is just symbolic -> if value.Count() == 0, we have already cleared the selection
+                        //    ClearSelection();
+                    }
+                    catch (Exception ex)
+                    {
+                        HandleException(ex);
+                    }
+                }
+            }
+        }
 
         #region Properties / Configuration
 
@@ -257,66 +319,7 @@ namespace TreeTea
 
         #endregion
 
-
-        /* Due to some handling issues with the base.SelectedNode,
-         * we completly override the default behaviour and handle the selected nodes ourself */
-
-        private TreeNode selectedNode;
-        /// <summary>
-        /// Property for the current (node set most recently) node
-        /// </summary>
-        public new TreeNode SelectedNode
-        {
-            get { return selectedNode; }
-            set
-            {
-                ClearSelection();
-
-                if (value == null)
-                    return;
-
-                SelectNode(value);
-            }
-        }
-
-        private List<TreeNode> selectedNodes;
-        /// <summary>
-        /// Property for all selected nodes
-        /// </summary>
-        public IEnumerable<TreeNode> SelectedNodes
-        {
-            get { return selectedNodes; }
-            set
-            {
-                ClearSelection();
-
-                if (value == null)
-                    return;
-
-                if (IsMultiSelectionEnabled)
-                {
-                    foreach (var node in value)
-                        ToggleNode(node, true);
-                }
-                else
-                {
-                    try
-                    {
-                        if (value.Count() > 1)
-                            throw new Exception("There was an attempt to select multiple nodes, but MultiSelection is disabled. The current selection-state has not been modified.");
-
-                        if (value.Count() == 1)
-                            ToggleNode(value.First(), true);
-                        //else  //this else is just symbolic -> if value.Count() == 0, we have already cleared the selection
-                        //    ClearSelection();
-                    }
-                    catch (Exception ex)
-                    {
-                        HandleException(ex);
-                    }
-                }
-            }
-        }
+        #region Node-Selection Methods
 
         /// <summary>
         /// This will either select or unselect the passed node
@@ -399,7 +402,7 @@ namespace TreeTea
             }
             else if (ModifierKeys == Keys.Shift)
             {
-                throw new NotImplementedException();
+                //throw new NotImplementedException();
             }
             else
             {
@@ -448,7 +451,44 @@ namespace TreeTea
 
         #endregion
 
+        #endregion
+
+
         #region TriState | Checkbox Handling
+
+        /// <summary>
+        /// Semaphore to prevent the "Checked changed" event to fire for each individual node, while "bulk-updating".
+        /// Like, if the user checks a node, each child will be checked too -> that would result in all nodes raising
+        /// the checked events, but we do not want that
+        /// </summary>
+        private int checkedChangedSemaphore = 0;
+
+        /// <summary>
+        /// Generates a List of Bitmaps containing all three possible checkboxes
+        /// </summary>
+        /// <returns></returns>
+        private ImageList GenerateCheckboxImageList()
+        {
+            //See http://msdn.microsoft.com/en-us/library/system.windows.forms.checkboxrenderer.aspx
+
+            var list = new ImageList();
+            for (int i = 0; i < 3; i++)
+            {
+                var bmp = new System.Drawing.Bitmap(16, 16);
+                var graphic = System.Drawing.Graphics.FromImage(bmp);
+
+                if (i == 0)
+                    CheckBoxRenderer.DrawCheckBox(graphic, new System.Drawing.Point(0, 0), System.Windows.Forms.VisualStyles.CheckBoxState.UncheckedNormal);
+                if (i == 1)
+                    CheckBoxRenderer.DrawCheckBox(graphic, new System.Drawing.Point(0, 0), System.Windows.Forms.VisualStyles.CheckBoxState.CheckedNormal);
+                if (i == 2)
+                    CheckBoxRenderer.DrawCheckBox(graphic, new System.Drawing.Point(0, 0), System.Windows.Forms.VisualStyles.CheckBoxState.MixedNormal);
+
+                list.Images.Add(bmp);
+            }
+
+            return list;
+        }
 
         #region Properties and Configuration
 
@@ -941,42 +981,8 @@ namespace TreeTea
 
         #endregion
 
-
-        /// <summary>
-        /// Semaphore to prevent the "Checked changed" event to fire for each individual node, while "bulk-updating".
-        /// Like, if the user checks a node, each child will be checked too -> that would result in all nodes raising
-        /// the checked events, but we do not want that
-        /// </summary>
-        private int checkedChangedSemaphore = 0;
-
-        /// <summary>
-        /// Generates a List of Bitmaps containing all three possible checkboxes
-        /// </summary>
-        /// <returns></returns>
-        private ImageList GenerateCheckboxImageList()
-        {
-            //See http://msdn.microsoft.com/en-us/library/system.windows.forms.checkboxrenderer.aspx
-
-            var list = new ImageList();
-            for (int i = 0; i < 3; i++)
-            {
-                var bmp = new System.Drawing.Bitmap(16, 16);
-                var graphic = System.Drawing.Graphics.FromImage(bmp);
-
-                if (i == 0)
-                    CheckBoxRenderer.DrawCheckBox(graphic, new System.Drawing.Point(0, 0), System.Windows.Forms.VisualStyles.CheckBoxState.UncheckedNormal);
-                if (i == 1)
-                    CheckBoxRenderer.DrawCheckBox(graphic, new System.Drawing.Point(0, 0), System.Windows.Forms.VisualStyles.CheckBoxState.CheckedNormal);
-                if (i == 2)
-                    CheckBoxRenderer.DrawCheckBox(graphic, new System.Drawing.Point(0, 0), System.Windows.Forms.VisualStyles.CheckBoxState.MixedNormal);
-
-                list.Images.Add(bmp);
-            }
-
-            return list;
-        }
-
         #endregion
+
 
         #region Altering TreeViews Behaviour
 
@@ -1020,6 +1026,7 @@ namespace TreeTea
 
         #endregion
 
+
         #region Helping Methods
 
         /// <summary>
@@ -1055,6 +1062,7 @@ namespace TreeTea
         }
 
         #endregion
+
 
         #region Testings
 
