@@ -106,6 +106,11 @@ namespace TreeTea
             treeNode33,
             treeNode36,
             treeNode39});
+            System.Windows.Forms.TreeNode treeNode41 = new System.Windows.Forms.TreeNode("Node30");
+            System.Windows.Forms.TreeNode treeNode42 = new System.Windows.Forms.TreeNode("Node31");
+            System.Windows.Forms.TreeNode treeNode43 = new System.Windows.Forms.TreeNode("Node4", new System.Windows.Forms.TreeNode[] {
+            treeNode41,
+            treeNode42});
             this.button2 = new System.Windows.Forms.Button();
             this.button1 = new System.Windows.Forms.Button();
             this.imageList1 = new System.Windows.Forms.ImageList(this.components);
@@ -148,7 +153,7 @@ namespace TreeTea
             this.treeTea.CheckBoxes = true;
             this.treeTea.ImageIndex = 0;
             this.treeTea.ImageList = this.imageList1;
-            this.treeTea.IsDoubleBufferingEnabled = true;
+            this.treeTea.IsDoubleBufferingEnabled = false;
             this.treeTea.Location = new System.Drawing.Point(12, 12);
             this.treeTea.Name = "treeTea";
             treeNode1.Name = "Node16";
@@ -273,11 +278,20 @@ namespace TreeTea
             treeNode40.Name = "Node3";
             treeNode40.StateImageIndex = 0;
             treeNode40.Text = "Node3";
+            treeNode41.Name = "Node30";
+            treeNode41.StateImageIndex = 0;
+            treeNode41.Text = "Node30";
+            treeNode42.Name = "Node31";
+            treeNode42.Text = "Node31";
+            treeNode43.Name = "Node4";
+            treeNode43.StateImageIndex = 0;
+            treeNode43.Text = "Node4";
             this.treeTea.Nodes.AddRange(new System.Windows.Forms.TreeNode[] {
             treeNode10,
             treeNode20,
             treeNode30,
-            treeNode40});
+            treeNode40,
+            treeNode43});
             this.treeTea.SelectedImageIndex = 0;
             this.treeTea.SelectedNodes = ((System.Collections.Generic.IEnumerable<System.Windows.Forms.TreeNode>)(resources.GetObject("treeTea.SelectedNodes")));
             this.treeTea.Size = new System.Drawing.Size(265, 371);

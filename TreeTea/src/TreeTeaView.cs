@@ -533,6 +533,9 @@ namespace TreeTea
             //we will update our checkbox based on the checkedstate that was set just now
             e.Node.StateImageIndex = (int)(e.Node.Checked ? CheckedState.Checked : CheckedState.Unchecked);
 
+            //Inform everyone that this nodes checkedstate has changed
+            AfterCheck?.Invoke(this, new CheckedStateChangedEventArgs(e.Node, (CheckedState)e.Node.StateImageIndex, e.Action));
+
             //and require all children of the node to update themself
             UpdateChildCheckedState(e.Node.Nodes, (CheckedState)e.Node.StateImageIndex);
 
@@ -550,7 +553,7 @@ namespace TreeTea
             TreeViewHitTestInfo hitInfo = base.HitTest(e.Location);
             if (hitInfo?.Location != TreeViewHitTestLocations.StateImage)
                 return;
-            
+
             if (e.Node.StateImageIndex == (int)CheckedState.Checked)
                 e.Node.Checked = false;
             else if (e.Node.StateImageIndex == (int)CheckedState.Unchecked)
@@ -770,45 +773,10 @@ namespace TreeTea
 
         #endregion
 
+        #region Update Checked State
 
-        /// <summary>
-        /// Semaphore to prevent the "Checked changed" event to fire for each individual node, while "bulk-updating".
-        /// Like, if the user checks a node, each child will be checked too -> that would result in all nodes raising
-        /// the checked events, but we do not want that
-        /// </summary>
-        private int checkedChangedSemaphore = 0;
-
-        /// <summary>
-        /// Defines the current checked state of a node
-        /// </summary>
-        public enum CheckedState { Uninitialised = -1, Unchecked = 0, Checked = 1, Mixed = 2 }
-
-        /// <summary>
-        /// Generates a List of Bitmaps containing all three possible checkboxes
-        /// </summary>
-        /// <returns></returns>
-        private ImageList GenerateCheckboxImageList()
-        {
-            //See http://msdn.microsoft.com/en-us/library/system.windows.forms.checkboxrenderer.aspx
-
-            var list = new ImageList();
-            for (int i = 0; i < 3; i++)
-            {
-                var bmp = new System.Drawing.Bitmap(16, 16);
-                var graphic = System.Drawing.Graphics.FromImage(bmp);
-
-                if (i == 0)
-                    CheckBoxRenderer.DrawCheckBox(graphic, new System.Drawing.Point(0, 0), System.Windows.Forms.VisualStyles.CheckBoxState.UncheckedNormal);
-                if (i == 1)
-                    CheckBoxRenderer.DrawCheckBox(graphic, new System.Drawing.Point(0, 0), System.Windows.Forms.VisualStyles.CheckBoxState.CheckedNormal);
-                if (i == 2)
-                    CheckBoxRenderer.DrawCheckBox(graphic, new System.Drawing.Point(0, 0), System.Windows.Forms.VisualStyles.CheckBoxState.MixedNormal);
-
-                list.Images.Add(bmp);
-            }
-
-            return list;
-        }
+        public delegate void CheckedStateChangedEventHandler(object sender, CheckedStateChangedEventArgs e);
+        public new event CheckedStateChangedEventHandler AfterCheck;
 
         /// <summary>
         /// This will update the CheckedState of the passed node by checking each childs CheckedState
@@ -839,7 +807,7 @@ namespace TreeTea
             //we determine the state of the childs to find out the state of the current node
             foreach (TreeNode childNode in node.Nodes)
             {
-                switch (isNodeParentNeedingUpdate ? (CheckedState)childNode.StateImageIndex : UpdateCheckedState(childNode))
+                switch (isNodeParentNeedingUpdate ? UpdateCheckedState(childNode) : (CheckedState)childNode.StateImageIndex)
                 {
                     case CheckedState.Unchecked:
                         uncheckedNodes++;
@@ -859,28 +827,25 @@ namespace TreeTea
             //then we can infer the current nodes state
             int oldStateImageIndex = node.StateImageIndex;
             if (mixedNodes > 0)
-            {
                 //if atleast one child is mixed, the current node has to be mixed as well
-                node.StateImageIndex = (int)CheckedState.Mixed;
-                switch (MixedNodesMode)
-                {
-                    case MixedStateMode.Checked: node.Checked = true; break;
-                    case MixedStateMode.Unchecked: node.Checked = false; break;
-                }
-            }
+                SetCheckedState(node, CheckedState.Mixed);
             else if (uncheckedNodes == 0 && checkedNodes > 0)
                 //if no unchecked and at least one checked node (and since no mixed too), this node is checked
-                node.StateImageIndex = (int)CheckedState.Checked;
+                SetCheckedState(node, CheckedState.Checked);
             else if (checkedNodes > 0)
                 //since (uncheckedNodes != 0 || checkedNodes == 0), we can infer, that when checkedNodes > 0, uncheckedNodes > 0 too,
                 //thus the children are mixed (some checked, some unchecked)
-                node.StateImageIndex = (int)CheckedState.Mixed;
+                SetCheckedState(node, CheckedState.Mixed);
             else if (uncheckedNodes > 0)
                 //now, in case there are some unchecked nodes (and therefore any nodes at all) this node is unchecked
-                node.StateImageIndex = (int)CheckedState.Unchecked;
+                SetCheckedState(node, CheckedState.Unchecked);
             else
                 //otherwise that node doesn't have any children and its state cannot be inferred by its children
-                node.StateImageIndex = node.StateImageIndex == (int)CheckedState.Uninitialised ? (int)CheckedState.Unchecked : node.StateImageIndex;
+                SetCheckedState(node, node.StateImageIndex == (int)CheckedState.Uninitialised ? CheckedState.Unchecked : (CheckedState)node.StateImageIndex);
+
+            //Inform everyone that this nodes checkedstate has changed
+            if (oldStateImageIndex != node.StateImageIndex)
+                AfterCheck?.Invoke(this, new CheckedStateChangedEventArgs(node, (CheckedState)node.StateImageIndex));
 
             if (isNodeParentNeedingUpdate && oldStateImageIndex != node.StateImageIndex)
                 UpdateCheckedState(node.Parent, true);
@@ -901,8 +866,81 @@ namespace TreeTea
                 node.StateImageIndex = (int)setState;
                 node.Checked = (setState == CheckedState.Checked || setState == CheckedState.Mixed);
 
+                //Inform everyone that this nodes checkedstate has changed
+                AfterCheck?.Invoke(this, new CheckedStateChangedEventArgs(node, (CheckedState)node.StateImageIndex));
+
                 UpdateChildCheckedState(node.Nodes, (CheckedState)node.StateImageIndex);
             }
+        }
+
+        /// <summary>
+        /// This will update the Checked and CheckedState of each node
+        /// </summary>
+        /// <param name="node"></param>
+        /// <param name="checkedState"></param>
+        /// <remarks>This was necessary, because I kept setting the node.Checked Property after setting the stateimageindex,
+        /// resulting the node.Checked Property overwriting the stateimageindex</remarks>
+        protected void SetCheckedState(TreeNode node, CheckedState checkedState)
+        {
+            switch (checkedState)
+            {
+                case CheckedState.Unchecked:
+                    node.Checked = false;
+                    node.StateImageIndex = (int)CheckedState.Unchecked;
+                    break;
+                case CheckedState.Checked:
+                    node.Checked = true;
+                    node.StateImageIndex = (int)CheckedState.Checked;
+                    break;
+                case CheckedState.Mixed:
+                    switch (MixedNodesMode)
+                    {
+                        case MixedStateMode.Checked: node.Checked = true; break;
+                        case MixedStateMode.Unchecked: node.Checked = false; break;
+                    }
+                    node.StateImageIndex = (int)CheckedState.Mixed;
+                    break;
+                default:
+                case CheckedState.Uninitialised:
+                    break;
+            }
+        }
+
+        #endregion
+
+
+        /// <summary>
+        /// Semaphore to prevent the "Checked changed" event to fire for each individual node, while "bulk-updating".
+        /// Like, if the user checks a node, each child will be checked too -> that would result in all nodes raising
+        /// the checked events, but we do not want that
+        /// </summary>
+        private int checkedChangedSemaphore = 0;
+
+        /// <summary>
+        /// Generates a List of Bitmaps containing all three possible checkboxes
+        /// </summary>
+        /// <returns></returns>
+        private ImageList GenerateCheckboxImageList()
+        {
+            //See http://msdn.microsoft.com/en-us/library/system.windows.forms.checkboxrenderer.aspx
+
+            var list = new ImageList();
+            for (int i = 0; i < 3; i++)
+            {
+                var bmp = new System.Drawing.Bitmap(16, 16);
+                var graphic = System.Drawing.Graphics.FromImage(bmp);
+
+                if (i == 0)
+                    CheckBoxRenderer.DrawCheckBox(graphic, new System.Drawing.Point(0, 0), System.Windows.Forms.VisualStyles.CheckBoxState.UncheckedNormal);
+                if (i == 1)
+                    CheckBoxRenderer.DrawCheckBox(graphic, new System.Drawing.Point(0, 0), System.Windows.Forms.VisualStyles.CheckBoxState.CheckedNormal);
+                if (i == 2)
+                    CheckBoxRenderer.DrawCheckBox(graphic, new System.Drawing.Point(0, 0), System.Windows.Forms.VisualStyles.CheckBoxState.MixedNormal);
+
+                list.Images.Add(bmp);
+            }
+
+            return list;
         }
 
         #endregion
@@ -962,6 +1000,15 @@ namespace TreeTea
                     cp.ExStyle |= 0x02000000;  // Turn on WS_EX_COMPOSITED
                 return cp;
             }
+        }
+
+        #endregion
+
+        #region Testings
+
+        public void Test()
+        {
+
         }
 
         #endregion
