@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.ComponentModel.Design;
 using System.Diagnostics;
 using System.Linq;
 using System.Text;
@@ -19,20 +20,30 @@ namespace TreeTea
     /// <para>Checkboxes can be enabled/disabled for specific nodes</para>
     /// <para>No need to do anything special in calling code</para>
     /// </remarks>
+    [Designer("System.Windows.Forms.Design.ParentControlDesigner, System.Design", typeof(IDesigner))]
     public partial class TreeTeaView : TreeView
     {
+        /* TODOS
+         * 
+         * verify that checkboxes work correctly, without tristate
+         * 
+         * check task manager
+         * 
+         * multiselection with shift
+         * 
+         * event on selectednode
+         * 
+         * is there enough exception handling?
+         * 
+         * */
+
+
         #region Members and Constructors
 
         /* Member and Properties regarding the node selection and MultiSelection can be found in Region "MultiSelection | Node Selection Handling" */
         /* Member and Properties regarding the tristate can be found in Region "TriState | Checkbox Handling" */
 
-
-        /* Members */
-        /// <summary>
-        /// Used to handle thrown exception; if this is null, the exception will be simply thrown
-        /// </summary>
-        private Action<Exception> exceptionHandler;
-
+            
         /* Constructor */
         /// <summary>
         /// Initializes the TreeTea
@@ -49,7 +60,7 @@ namespace TreeTea
             /*Members*/
             selectedNode = null;
             selectedNodes = new List<TreeNode>();
-            exceptionHandler = null;
+            ExceptionHandler = null;
             base.SelectedNode = null;
             this.StateImageList = GenerateCheckboxImageList();
             this.isCheckBoxesEnabled = false; //gets overwritten when the user sets the property, but we need this though...
@@ -65,7 +76,7 @@ namespace TreeTea
         /// <param name="exceptionHandler">Function to handle the exceptions, otherwise the exception will be thrown</param>
         public TreeTeaView(Action<Exception> exceptionHandler) : this()
         {
-            this.exceptionHandler = exceptionHandler;
+            this.ExceptionHandler = exceptionHandler;
         }
 
         /// <summary>
@@ -86,7 +97,7 @@ namespace TreeTea
         /// <param name="exceptionHandler">Function to handle the exceptions, otherwise the exception will be thrown</param>
         public TreeTeaView(Func<TreeNode, bool> funcIsCheckboxEnabledForNode, Action<Exception> exceptionHandler) : this()
         {
-            this.exceptionHandler = exceptionHandler;
+            this.ExceptionHandler = exceptionHandler;
             this.funcIsCheckboxEnabledForNode = funcIsCheckboxEnabledForNode;
         }
 
@@ -119,11 +130,11 @@ namespace TreeTea
         public bool EnableDoubleBuffering { get; set; }
 
         /// <summary>
-        /// Function to handle the exceptions. If this is null, the exception will be thrown
+        /// Function to handle exceptions. If this is null, the exception will be thrown
         /// </summary>
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         [Browsable(false)] //ExceptionHandler should not be exposed to the Property Window
-        public Action<Exception> ExceptionHandler => this.exceptionHandler;
+        public Action<Exception> ExceptionHandler { get; set; }
 
         #endregion
 
@@ -292,7 +303,7 @@ namespace TreeTea
 
         protected override void OnMouseUp(MouseEventArgs e)
         {
-            //NodeClicked(e);
+            //NodeClicked(e); //no clue why I keep this here, maybe I'm clingy
         }
 
         /// <summary>
@@ -425,7 +436,7 @@ namespace TreeTea
         /// Clears the current selection and selects the passed node
         /// </summary>
         /// <param name="node">Node to select</param>
-        private void ClearSelectionAndSelect(TreeNode node)
+        protected void ClearSelectionAndSelect(TreeNode node)
         {
             if (node == null)
                 return;
@@ -438,7 +449,7 @@ namespace TreeTea
         /// <summary>
         /// Clears out the current selection
         /// </summary>
-        private void ClearSelection()
+        protected void ClearSelection()
         {
             try
             {
@@ -467,11 +478,12 @@ namespace TreeTea
         #region TriState | Checkbox Handling
 
         /// <summary>
-        /// Semaphore to prevent the "Checked changed" event to fire for each individual node, while "bulk-updating".
+        /// <para>Semaphore to prevent the "Checked changed" event to fire for each individual node, while "bulk-updating".
         /// Like, if the user checks a node, each child will be checked too -> that would result in all nodes raising
-        /// the checked events, but we do not want that
+        /// the checked events, but we do not want that</para>
+        /// <para>Please use this Semaphor if you tend to override one of the following methods: OnCreateControl, OnAfterExpand, OnAfterCheck</para>
         /// </summary>
-        private int checkedChangedSemaphore = 0;
+        protected int checkedChangedSemaphore = 0;
         /// <summary>
         /// Member for the Property "Checked"
         /// If this is true, Checkboxes will be visible
@@ -481,7 +493,7 @@ namespace TreeTea
         /// A function which is used to determine, whether a node has a checkbox visible
         /// If the Function returns false for the passed node, no checkbox will be visible for the node
         /// </summary>
-        private Func<TreeNode, bool> funcIsCheckboxEnabledForNode;
+        protected Func<TreeNode, bool> funcIsCheckboxEnabledForNode;
 
         /// <summary>
         /// Generates a List of Bitmaps containing all three possible checkboxes
@@ -594,7 +606,7 @@ namespace TreeTea
         /// <remarks><para>This may be required/wanted, because our checkboxes are self-drawn and used in the stateimage
         /// resulting in double clicks on the checkbox to be used as if you have double clicked the label.</para>
         /// <para>This will not block the double-click to expand/collapse functionality when double-clicked onto the label</para></remarks>
-        [Category("TreeTea General Configuration")]
+        [Category("TreeTea TriState")]
         [Description("Enable this, to prevent the Nodes to expand/collapse by a double-click onto the checkboxes. This will affect double-clicks onto the node-label.")]
         [DefaultValue(true)]
         public bool SupressCheckboxDoubleClick { get; set; }
@@ -650,7 +662,8 @@ namespace TreeTea
             checkedChangedSemaphore++;
 
             //we will update our checkbox based on the checkedstate that was set just now
-            e.Node.StateImageIndex = (int)(e.Node.Checked ? CheckedState.Checked : CheckedState.Unchecked);
+            //e.Node.StateImageIndex = (int)(e.Node.Checked ? CheckedState.Checked : CheckedState.Unchecked);
+            SetCheckedState(e.Node, (e.Node.Checked ? CheckedState.Checked : CheckedState.Unchecked));
 
             //Inform everyone that this nodes checkedstate has changed
             AfterCheck?.Invoke(this, new CheckedStateChangedEventArgs(e.Node, (CheckedState)e.Node.StateImageIndex, e.Action));
@@ -700,7 +713,8 @@ namespace TreeTea
         #region Hide Checkboxes
 
         /// <summary>
-        /// Hides the Checkbox of the passed node
+        /// <para>Hides the Checkbox of the passed nodes</para>
+        /// <para>If "IsCheckboxesEnabledForNode" Property is set, this method will only affect nodes, where the property returns true (thus Checkbox is enabled for the node)</para>
         /// </summary>
         /// <param name="node"></param>
         public void HideCheckbox(TreeNode node)
@@ -709,7 +723,8 @@ namespace TreeTea
         }
 
         /// <summary>
-        /// Hides the Checkbox of the passed nodes
+        /// <para>Hides the Checkbox of the passed nodes</para>
+        /// <para>If "IsCheckboxesEnabledForNode" Property is set, this method will only affect nodes, where the property returns true (thus Checkbox is enabled for the node)</para>
         /// </summary>
         /// <param name="nodes"></param>
         public void HideCheckbox(IEnumerable<TreeNode> nodes)
@@ -718,7 +733,8 @@ namespace TreeTea
         }
 
         /// <summary>
-        /// Hides the Checkbox of the passed nodes
+        /// <para>Hides the Checkbox of the passed nodes</para>
+        /// <para>If "IsCheckboxesEnabledForNode" Property is set, this method will only affect nodes, where the property returns true (thus Checkbox is enabled for the node)</para>
         /// </summary>
         /// <param name="nodes"></param>
         public void HideCheckbox(TreeNodeCollection nodes)
@@ -728,7 +744,8 @@ namespace TreeTea
         }
 
         /// <summary>
-        /// Hides the Checkbox of the passed nodes
+        /// <para>Hides the Checkbox of the passed nodes</para>
+        /// <para>If "IsCheckboxesEnabledForNode" Property is set, this method will only affect nodes, where the property returns true (thus Checkbox is enabled for the node)</para>
         /// </summary>
         /// <param name="nodes"></param>
         public void HideCheckbox(params TreeNode[] nodes)
@@ -737,7 +754,8 @@ namespace TreeTea
         }
 
         /// <summary>
-        /// Hides the Checkbox of the passed node
+        /// <para>Hides the Checkbox of the passed nodes and defines, whether the childnodes should have a checkbox too</para>
+        /// <para>If "IsCheckboxesEnabledForNode" Property is set, this method will only affect nodes, where the property returns true (thus Checkbox is enabled for the node)</para>
         /// </summary>
         /// <param name="node"></param>
         /// <param name="hideCheckboxesOfChildren">If true, checkboxes of all nodes below will be hidden</param>
@@ -747,7 +765,8 @@ namespace TreeTea
         }
 
         /// <summary>
-        /// Hides the Checkbox of the passed node
+        /// <para>Hides the Checkbox of the passed nodes and defines, whether the childnodes should have a checkbox too</para>
+        /// <para>If "IsCheckboxesEnabledForNode" Property is set, this method will only affect nodes, where the property returns true (thus Checkbox is enabled for the node)</para>
         /// </summary>
         /// <param name="node"></param>
         /// <param name="hideCheckboxesOfChildren">If true, checkboxes of all nodes below will be hidden</param>
@@ -758,7 +777,8 @@ namespace TreeTea
         }
 
         /// <summary>
-        /// Hides the Checkbox of the passed nodes
+        /// <para>Hides the Checkbox of the passed nodes and defines, whether the childnodes should have a checkbox too</para>
+        /// <para>If "IsCheckboxesEnabledForNode" Property is set, this method will only affect nodes, where the property returns true (thus Checkbox is enabled for the node)</para>
         /// </summary>
         /// <param name="nodes"></param>
         /// <param name="hideCheckboxesOfChildren">If true, checkboxes of all nodes below will be hidden</param>
@@ -785,7 +805,8 @@ namespace TreeTea
         }
 
         /// <summary>
-        /// Shows the Checkbox for all possible nodes in the treeview
+        /// <para>Hides the Checkbox for all possible nodes in the treeview</para>
+        /// <para>If "IsCheckboxesEnabledForNode" Property is set, this method will only affect nodes, where the property returns true (thus Checkbox is enabled for the node)</para>
         /// </summary>
         public void HideAllCheckboxes()
         {
@@ -799,7 +820,7 @@ namespace TreeTea
 
         /// <summary>
         /// <para>Shows the Checkbox of the passed node</para>
-        /// <para>Set the IsCheckboxEnabledForNode Property to define, which Nodes should have a Checkbox</para>
+        /// <para>If "IsCheckboxesEnabledForNode" Property is set, this method will only affect nodes, where the property returns true (thus Checkbox is enabled for the node)</para>
         /// </summary>
         /// <param name="node"></param>
         public void ShowCheckbox(TreeNode node)
@@ -809,7 +830,7 @@ namespace TreeTea
 
         /// <summary>
         /// <para>Shows the Checkbox of the passed node</para>
-        /// <para>Set the IsCheckboxEnabledForNode Property to define, which Nodes should have a Checkbox</para>
+        /// <para>If "IsCheckboxesEnabledForNode" Property is set, this method will only affect nodes, where the property returns true (thus Checkbox is enabled for the node)</para>
         /// </summary>
         /// <param name="node"></param>
         public void ShowCheckbox(IEnumerable<TreeNode> nodes)
@@ -819,7 +840,7 @@ namespace TreeTea
 
         /// <summary>
         /// <para>Shows the Checkbox of the passed node</para>
-        /// <para>Set the IsCheckboxEnabledForNode Property to define, which Nodes should have a Checkbox</para>
+        /// <para>If "IsCheckboxesEnabledForNode" Property is set, this method will only affect nodes, where the property returns true (thus Checkbox is enabled for the node)</para>
         /// </summary>
         /// <param name="node"></param>
         public void ShowCheckbox(TreeNodeCollection nodes)
@@ -830,7 +851,7 @@ namespace TreeTea
 
         /// <summary>
         /// <para>Shows the Checkbox of the passed node</para>
-        /// <para>Set the IsCheckboxEnabledForNode Property to define, which Nodes should have a Checkbox</para>
+        /// <para>If "IsCheckboxesEnabledForNode" Property is set, this method will only affect nodes, where the property returns true (thus Checkbox is enabled for the node)</para>
         /// </summary>
         /// <param name="node"></param>
         public void ShowCheckbox(params TreeNode[] nodes)
@@ -840,7 +861,7 @@ namespace TreeTea
 
         /// <summary>
         /// <para>Shows the Checkbox of the passed node and defines, whether the childnodes should have a checkbox too</para>
-        /// <para>Set the IsCheckboxEnabledForNode Property to define, which Nodes should have a Checkbox</para>
+        /// <para>If "IsCheckboxesEnabledForNode" Property is set, this method will only affect nodes, where the property returns true (thus Checkbox is enabled for the node)</para>
         /// </summary>
         /// <param name="node"></param>
         /// <param name="showCheckboxesOfChildren">If true, checkboxes of all nodes below will be shown</param>
@@ -851,7 +872,7 @@ namespace TreeTea
 
         /// <summary>
         /// <para>Shows the Checkbox of the passed node and defines, whether the childnodes should have a checkbox too</para>
-        /// <para>Set the IsCheckboxEnabledForNode Property to define, which Nodes should have a Checkbox</para>
+        /// <para>If "IsCheckboxesEnabledForNode" Property is set, this method will only affect nodes, where the property returns true (thus Checkbox is enabled for the node)</para>
         /// </summary>
         /// <param name="node"></param>
         /// <param name="showCheckboxesOfChildren">If true, checkboxes of all nodes below will be shown</param>
@@ -863,7 +884,7 @@ namespace TreeTea
 
         /// <summary>
         /// <para>Shows the Checkbox of the passed node and defines, whether the childnodes should have a checkbox too</para>
-        /// <para>Set the IsCheckboxEnabledForNode Property to define, which Nodes should have a Checkbox</para>
+        /// <para>If "IsCheckboxesEnabledForNode" Property is set, this method will only affect nodes, where the property returns true (thus Checkbox is enabled for the node)</para>
         /// </summary>
         /// <param name="node"></param>
         /// <param name="showCheckboxesOfChildren">If true, checkboxes of all nodes below will be shown</param>
@@ -900,7 +921,7 @@ namespace TreeTea
 
         /// <summary>
         /// <para>Shows the Checkbox for all possible nodes in the treeview</para>
-        /// <para>Set the IsCheckboxEnabledForNode Property to define, which Nodes should have a Checkbox</para>
+        /// <para>If "IsCheckboxesEnabledForNode" Property is set, this method will only affect nodes, where the property returns true (thus Checkbox is enabled for the node)</para>
         /// </summary>
         public void ShowAllCheckboxes()
         {
@@ -1111,8 +1132,8 @@ namespace TreeTea
         /// <param name="ex"></param>
         protected void HandleException(Exception ex)
         {
-            if (exceptionHandler != null)
-                exceptionHandler(ex);
+            if (ExceptionHandler != null)
+                ExceptionHandler(ex);
             else
                 throw ex;
         }
@@ -1123,7 +1144,7 @@ namespace TreeTea
         [Conditional("DEBUG")]
         private void InitializeDebugInstance()
         {
-            exceptionHandler = new Action<Exception>((ex) =>
+            ExceptionHandler = new Action<Exception>((ex) =>
             {
                 string message = String.Format("\nAn exception was thrown: {0}\n{1}\nStacktrace:\n{2}\n", ex.GetType().ToString(), ex.Message, ex.StackTrace);
                 Exception innerEx = ex.InnerException;

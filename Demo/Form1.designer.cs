@@ -1,4 +1,6 @@
-namespace TreeTea
+using TreeTea;
+
+namespace Demo
 {
 	partial class Form1
 	{
@@ -151,7 +153,6 @@ namespace TreeTea
             | System.Windows.Forms.AnchorStyles.Left) 
             | System.Windows.Forms.AnchorStyles.Right)));
             this.treeTea.Location = new System.Drawing.Point(12, 12);
-            this.treeTea.MultiSelectionMode = ((TreeTea.TreeTeaView.MultiSelectionRestriction)((TreeTea.TreeTeaView.MultiSelectionRestriction.SameLevel | TreeTea.TreeTeaView.MultiSelectionRestriction.SameParent)));
             this.treeTea.Name = "treeTea";
             treeNode1.Name = "Node16";
             treeNode1.Text = "Node16";
