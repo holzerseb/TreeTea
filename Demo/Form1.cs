@@ -105,13 +105,25 @@ namespace Demo
         private void button1_Click(object sender, EventArgs e)
         {
             treeTea.CheckBoxes = !treeTea.CheckBoxes;
+            Console.WriteLine(String.Format("Checkboxes are {0}", treeTea.CheckBoxes ? "enabled" : "disabled"));
         }
 
         //private int mode = 0;
         private void button2_Click(object sender, EventArgs e)
         {
-            treeTea.MultiSelectionMode = TreeTeaView.MultiSelectionRestriction.SameLevelAndParent;
-            treeTea.SelectedNodes = new List<TreeNode>() { treeTea.Nodes[0], treeTea.Nodes[0].Nodes[1], treeTea.Nodes[1].Nodes[1], treeTea.Nodes[2], treeTea.Nodes[2].Nodes[0] };
+            treeTea.IsTriStateEnabled = !treeTea.IsTriStateEnabled;
+            Console.WriteLine(String.Format("TriState is {0}", treeTea.IsTriStateEnabled ? "enabled" : "disabled"));
+
+            //treeTea.MultiSelectionMode = TreeTeaView.MultiSelectionRestriction.SameLevelAndParent;
+            //treeTea.SelectedNodes = new List<TreeNode>() { treeTea.Nodes[0], treeTea.Nodes[0].Nodes[1], treeTea.Nodes[1].Nodes[1], treeTea.Nodes[2], treeTea.Nodes[2].Nodes[0] };
+
+            //if (treeTea.FuncIsCheckboxEnabledForNode == null)
+            //    treeTea.FuncIsCheckboxEnabledForNode = new Func<TreeNode, bool>((node) =>
+            //    {
+            //    //return node.Index % 2 == 1;
+            //    return node.Text.StartsWith("Node2") || node.Text == "Node11" || node.Text == "Node36" || node.Text == "Node37";
+            //    });
+            //else treeTea.FuncIsCheckboxEnabledForNode = null;
         }
 
         private void TreeTea_AfterCheck(object sender, CheckedStateChangedEventArgs e)

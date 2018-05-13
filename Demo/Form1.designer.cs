@@ -152,6 +152,7 @@ namespace Demo
             this.treeTea.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
             | System.Windows.Forms.AnchorStyles.Left) 
             | System.Windows.Forms.AnchorStyles.Right)));
+            this.treeTea.IsTriStateEnabled = false;
             this.treeTea.Location = new System.Drawing.Point(12, 12);
             this.treeTea.Name = "treeTea";
             treeNode1.Name = "Node16";
@@ -174,6 +175,7 @@ namespace Demo
             treeNode9.Text = "Node6";
             treeNode10.ImageIndex = -2;
             treeNode10.Name = "Node0";
+            treeNode10.StateImageIndex = 0;
             treeNode10.Text = "Node0";
             treeNode11.Name = "Node22";
             treeNode11.Text = "Node22";
@@ -195,6 +197,7 @@ namespace Demo
             treeNode19.Name = "Node9";
             treeNode19.Text = "Node9";
             treeNode20.Name = "Node1";
+            treeNode20.StateImageIndex = 0;
             treeNode20.Text = "Node1";
             treeNode21.Name = "Node38";
             treeNode21.Text = "Node38";
@@ -215,6 +218,7 @@ namespace Demo
             treeNode29.Name = "Node12";
             treeNode29.Text = "Node12";
             treeNode30.Name = "Node2";
+            treeNode30.StateImageIndex = 0;
             treeNode30.Text = "Node2";
             treeNode31.Name = "Node32";
             treeNode31.Text = "Node32";
@@ -235,12 +239,14 @@ namespace Demo
             treeNode39.Name = "Node15";
             treeNode39.Text = "Node15";
             treeNode40.Name = "Node3";
+            treeNode40.StateImageIndex = 0;
             treeNode40.Text = "Node3";
             treeNode41.Name = "Node30";
             treeNode41.Text = "Node30";
             treeNode42.Name = "Node31";
             treeNode42.Text = "Node31";
             treeNode43.Name = "Node4";
+            treeNode43.StateImageIndex = 0;
             treeNode43.Text = "Node4";
             this.treeTea.Nodes.AddRange(new System.Windows.Forms.TreeNode[] {
             treeNode10,

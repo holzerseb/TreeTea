@@ -27,6 +27,8 @@ namespace TreeTea
          * 
          * verify that checkboxes work correctly, without tristate
          * 
+         * maybe let the user disable "check childs if parent is checked"
+         * 
          * check task manager
          * 
          * multiselection with shift
@@ -43,7 +45,7 @@ namespace TreeTea
         /* Member and Properties regarding the node selection and MultiSelection can be found in Region "MultiSelection | Node Selection Handling" */
         /* Member and Properties regarding the tristate can be found in Region "TriState | Checkbox Handling" */
 
-            
+
         /* Constructor */
         /// <summary>
         /// Initializes the TreeTea
@@ -634,9 +636,14 @@ namespace TreeTea
         {
             base.OnBeforeExpand(e);
 
+            if (checkedChangedSemaphore > 0)
+                return;
+            checkedChangedSemaphore++;
+
             //Some Developers tend to use LoD (Load on Demand) Nodes, so we ensure that the checkboxes are visible correctly
             if (this.CheckBoxes) ShowCheckbox(e.Node, CheckBoxes);
             else HideCheckbox(e.Node, CheckBoxes);
+            checkedChangedSemaphore--;
         }
 
         protected override void OnAfterExpand(TreeViewEventArgs e)
@@ -668,11 +675,15 @@ namespace TreeTea
             //Inform everyone that this nodes checkedstate has changed
             AfterCheck?.Invoke(this, new CheckedStateChangedEventArgs(e.Node, (CheckedState)e.Node.StateImageIndex, e.Action));
 
-            //and require all children of the node to update themself
-            UpdateChildCheckedState(e.Node.Nodes, (CheckedState)e.Node.StateImageIndex);
+            //In case TriState is enabled, we also have to update the childs and parents
+            if (IsTriStateEnabled)
+            {
+                //and require all children of the node to update themself
+                UpdateChildCheckedState(e.Node.Nodes, (CheckedState)e.Node.StateImageIndex);
 
-            //also, the ancestors might need to change its state
-            UpdateCheckedState(e.Node.Parent, true); //we can check first gen childs only here, because only one child of the parent has changed: e.Node
+                //also, the ancestors might need to change its state
+                UpdateCheckedState(e.Node.Parent, true); //we can check first gen childs only here, because only one child of the parent has changed: e.Node
+            }
 
             checkedChangedSemaphore--;
         }
@@ -897,17 +908,8 @@ namespace TreeTea
             {
                 foreach (var node in nodes)
                 {
-                    //if (IsCheckboxEnabledForNode != null && !IsCheckboxEnabledForNode(node))
-                    //{
-                    //node.StateImageIndex = (int)CheckedState.Uninitialised;
-                    SetCheckedState(node, CheckedState.Uninitialised);
-                    //}
-                    //else
-                    //{
-                    if (node.StateImageIndex == (int)CheckedState.Uninitialised)
-                        //node.StateImageIndex = (int)CheckedState.Unchecked; //todo: should this somehow be initialized with Checked.Mixed, Checked.Checked, Checked.Unchecked?
-                        SetCheckedState(node, CheckedState.Unchecked);
-                    //}
+                    if ((CheckedState)node.StateImageIndex == CheckedState.Uninitialised)
+                        SetCheckedState(node, CheckedState.Unchecked); //todo: should this somehow be initialized with Checked.Mixed, Checked.Checked, Checked.Unchecked?
 
                     if (showCheckboxesOfChildren)
                         ShowCheckbox(node.Nodes.Cast<TreeNode>(), showCheckboxesOfChildren);
@@ -957,8 +959,13 @@ namespace TreeTea
         /// <returns>The new/current CheckedState of the passed node</returns>
         protected CheckedState UpdateCheckedState(TreeNode node, bool isNodeParentNeedingUpdate)
         {
+            //there aint no node, then there aint nothin to do
             if (node == null)
                 return CheckedState.Uninitialised;
+
+            //also, if tristate is disabled, we will not check the nodes children to determine this nodes state
+            if(!IsTriStateEnabled)
+                return (CheckedState)node.StateImageIndex;
 
             int uncheckedNodes = 0, checkedNodes = 0, mixedNodes = 0;
 
@@ -997,9 +1004,9 @@ namespace TreeTea
             else if (uncheckedNodes > 0)
                 //now, in case there are some unchecked nodes (and therefore any nodes at all) this node is unchecked
                 SetCheckedState(node, CheckedState.Unchecked);
-            else
-                //otherwise that node doesn't have any children and its state cannot be inferred by its children
-                SetCheckedState(node, node.StateImageIndex == (int)CheckedState.Uninitialised ? CheckedState.Unchecked : (CheckedState)node.StateImageIndex);
+            //else
+            //    //otherwise that node doesn't have any children and its state cannot be inferred by its children
+            //    SetCheckedState(node, node.StateImageIndex == (int)CheckedState.Uninitialised ? CheckedState.Unchecked : (CheckedState)node.StateImageIndex);
 
             //Inform everyone that this nodes checkedstate has changed
             if (oldStateImageIndex != node.StateImageIndex)
@@ -1037,21 +1044,23 @@ namespace TreeTea
         /// This will update the Checked and CheckedState of each node
         /// </summary>
         /// <param name="node"></param>
-        /// <param name="checkedState"></param>
+        /// <param name="setState"></param>
         /// <remarks>This was necessary, because I kept setting the node.Checked Property after setting the stateimageindex,
         /// resulting the node.Checked Property overwriting the stateimageindex</remarks>
-        protected void SetCheckedState(TreeNode node, CheckedState checkedState)
+        protected void SetCheckedState(TreeNode node, CheckedState setState)
         {
-            //if the user has disabled the Checkboxes in first place, we ain't doin nothin here, brah
-            if (!this.CheckBoxes) return;
+            //if the user has disabled the Checkboxes in first place, we ain't lettin the user show the checkbox here
+            if (!this.CheckBoxes) setState = CheckedState.Uninitialised;
 
+            //check if the node should have a checkbox at all
             if (FuncIsCheckboxEnabledForNode != null && !FuncIsCheckboxEnabledForNode(node))
             {
                 node.StateImageIndex = (int)CheckedState.Uninitialised;
                 return;
             }
 
-            switch (checkedState)
+            //then set the wanted state
+            switch (setState)
             {
                 case CheckedState.Unchecked:
                     node.Checked = false;
@@ -1062,6 +1071,13 @@ namespace TreeTea
                     node.StateImageIndex = (int)CheckedState.Checked;
                     break;
                 case CheckedState.Mixed:
+                    //also here, we only allow the mixed state if the TriState is enabled
+                    if (!IsTriStateEnabled)
+                    {
+                        //todo: should we here invert the current state? Or check the childs? i dont knooow
+                        break;
+                    }
+
                     switch (MixedNodesMode)
                     {
                         case MixedStateMode.Checked: node.Checked = true; break;
@@ -1071,6 +1087,7 @@ namespace TreeTea
                     break;
                 default:
                 case CheckedState.Uninitialised:
+                    node.StateImageIndex = (int)CheckedState.Uninitialised;
                     break;
             }
         }
