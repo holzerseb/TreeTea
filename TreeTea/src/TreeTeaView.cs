@@ -25,8 +25,6 @@ namespace TreeTea
     {
         /* TODOS
          * 
-         * verify that checkboxes work correctly, without tristate
-         * 
          * maybe let the user disable "check childs if parent is checked"
          * 
          * check task manager
@@ -34,8 +32,6 @@ namespace TreeTea
          * multiselection with shift
          * 
          * event on selectednode
-         * 
-         * is there enough exception handling?
          * 
          * */
 
@@ -324,7 +320,7 @@ namespace TreeTea
                     base.OnMouseDown(e);
                     return;
                 }
-
+                
                 //For more info about treeviewhittestinfo, see https://msdn.microsoft.com/en-us/library/system.windows.forms.treeviewhittestinfo(v=vs.110).aspx; shits convinient
                 TreeViewHitTestInfo hitInfo = base.HitTest(e.Location);
                 if (hitInfo.Location == TreeViewHitTestLocations.Label || (SelectNodeOnImageClick && hitInfo.Location == TreeViewHitTestLocations.Image))
@@ -351,38 +347,44 @@ namespace TreeTea
         /// <param name="select">true to select node</param>
         protected void ToggleNode(TreeNode node, bool select)
         {
-            try
+            if (node == null || node.TreeView != this)
+                return;
+
+            if (select)
             {
-                if (node == null || node.TreeView != this)
-                    return;
-
-                if (select)
+                //First, we check if the selection is allowed
+                if (selectedNode != null)
                 {
-                    //First, we check if the selection is allowed
-                    if (selectedNode != null)
-                    {
-                        if (MultiSelectionMode.HasFlag(MultiSelectionRestriction.SameLevel) && selectedNode.Level != node.Level)
-                            return;
-                        if (MultiSelectionMode.HasFlag(MultiSelectionRestriction.SameParent) && selectedNode.Parent != node.Parent)
-                            return;
-                        if (MultiSelectionMode.HasFlag(MultiSelectionRestriction.SameTagType) && selectedNode.Tag?.GetType() != node.Tag?.GetType())
-                            return;
-                    }
+                    if (MultiSelectionMode.HasFlag(MultiSelectionRestriction.SameLevel) && selectedNode.Level != node.Level)
+                        return;
+                    if (MultiSelectionMode.HasFlag(MultiSelectionRestriction.SameParent) && selectedNode.Parent != node.Parent)
+                        return;
+                    if (MultiSelectionMode.HasFlag(MultiSelectionRestriction.SameTagType) && selectedNode.Tag?.GetType() != node.Tag?.GetType())
+                        return;
+                }
 
-                    //Then perform the selection
-                    if (!selectedNodes.Contains(node))
-                        selectedNodes.Add(node);
+                //Then perform the selection
+                if (!selectedNodes.Contains(node))
+                    selectedNodes.Add(node);
 
+                try
+                {
                     selectedNode = node;
 
                     node.BackColor = System.Drawing.SystemColors.Highlight;
                     node.ForeColor = System.Drawing.SystemColors.HighlightText;
                 }
-                else
+                catch (Exception ex)
                 {
-                    if (selectedNodes.Contains(node))
-                        selectedNodes.Remove(node);
-
+                    HandleException(ex);
+                }
+            }
+            else
+            {
+                if (selectedNodes.Contains(node))
+                    selectedNodes.Remove(node);
+                try
+                {
                     if (selectedNode == node)
                         if (selectedNodes.Count > 0)
                             selectedNode = selectedNodes.Last();
@@ -392,10 +394,10 @@ namespace TreeTea
                     node.BackColor = this.BackColor;
                     node.ForeColor = this.ForeColor;
                 }
-            }
-            catch (Exception ex)
-            {
-                HandleException(ex);
+                catch (Exception ex)
+                {
+                    HandleException(ex);
+                }
             }
         }
 
@@ -455,11 +457,18 @@ namespace TreeTea
         {
             try
             {
-                //Reset graphics for selectedNodes
-                foreach (TreeNode node in selectedNodes.Where(x => x.BackColor == System.Drawing.SystemColors.Highlight))
+                try
                 {
-                    node.BackColor = this.BackColor;
-                    node.ForeColor = this.ForeColor;
+                    //Reset graphics for selectedNodes
+                    foreach (TreeNode node in selectedNodes.Where(x => x.BackColor == System.Drawing.SystemColors.Highlight))
+                    {
+                        node.BackColor = this.BackColor;
+                        node.ForeColor = this.ForeColor;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    HandleException(ex);
                 }
 
                 //clear everything
@@ -506,22 +515,48 @@ namespace TreeTea
             //See http://msdn.microsoft.com/en-us/library/system.windows.forms.checkboxrenderer.aspx
 
             var list = new ImageList();
-            for (int i = 0; i < 3; i++)
+            try
             {
-                var bmp = new System.Drawing.Bitmap(16, 16);
-                var graphic = System.Drawing.Graphics.FromImage(bmp);
+                for (int i = 0; i < 3; i++)
+                {
+                    var bmp = new System.Drawing.Bitmap(16, 16);
+                    var graphic = System.Drawing.Graphics.FromImage(bmp);
 
-                if (i == 0)
-                    CheckBoxRenderer.DrawCheckBox(graphic, new System.Drawing.Point(0, 0), System.Windows.Forms.VisualStyles.CheckBoxState.UncheckedNormal);
-                if (i == 1)
-                    CheckBoxRenderer.DrawCheckBox(graphic, new System.Drawing.Point(0, 0), System.Windows.Forms.VisualStyles.CheckBoxState.CheckedNormal);
-                if (i == 2)
-                    CheckBoxRenderer.DrawCheckBox(graphic, new System.Drawing.Point(0, 0), System.Windows.Forms.VisualStyles.CheckBoxState.MixedNormal);
+                    if (i == 0)
+                        CheckBoxRenderer.DrawCheckBox(graphic, new System.Drawing.Point(0, 0), System.Windows.Forms.VisualStyles.CheckBoxState.UncheckedNormal);
+                    if (i == 1)
+                        CheckBoxRenderer.DrawCheckBox(graphic, new System.Drawing.Point(0, 0), System.Windows.Forms.VisualStyles.CheckBoxState.CheckedNormal);
+                    if (i == 2)
+                        CheckBoxRenderer.DrawCheckBox(graphic, new System.Drawing.Point(0, 0), System.Windows.Forms.VisualStyles.CheckBoxState.MixedNormal);
 
-                list.Images.Add(bmp);
+                    list.Images.Add(bmp);
+                }
+            }
+            catch (Exception ex)
+            {
+                HandleException(ex);
             }
 
             return list;
+        }
+
+        /// <summary>
+        /// This method will inform all subscribers of the TreeTea.AfterCheck event
+        /// by firing the delegate
+        /// </summary>
+        /// <param name="argsToPass">The event args you want to pass</param>
+        /// <remarks>This was put into a dedicated method, because it used various times
+        /// and involves some error handling</remarks>
+        protected void InvokeAfterCheckEvent(CheckedStateChangedEventArgs argsToPass)
+        {
+            try
+            {
+                AfterCheck?.Invoke(this, argsToPass);
+            }
+            catch (Exception ex)
+            {
+                HandleException(ex);
+            }
         }
 
         #region Properties and Configuration
@@ -673,7 +708,7 @@ namespace TreeTea
             SetCheckedState(e.Node, (e.Node.Checked ? CheckedState.Checked : CheckedState.Unchecked));
 
             //Inform everyone that this nodes checkedstate has changed
-            AfterCheck?.Invoke(this, new CheckedStateChangedEventArgs(e.Node, (CheckedState)e.Node.StateImageIndex, e.Action));
+            InvokeAfterCheckEvent(new CheckedStateChangedEventArgs(e.Node, (CheckedState)e.Node.StateImageIndex, e.Action));
 
             //In case TriState is enabled, we also have to update the childs and parents
             if (IsTriStateEnabled)
@@ -691,6 +726,8 @@ namespace TreeTea
         protected override void OnNodeMouseClick(TreeNodeMouseClickEventArgs e)
         {
             base.OnNodeMouseClick(e);
+
+            if (e.Node == null) return;
 
             //For more info about treeviewhittestinfo, see https://msdn.microsoft.com/en-us/library/system.windows.forms.treeviewhittestinfo(v=vs.110).aspx; shits convinient
             TreeViewHitTestInfo hitInfo = base.HitTest(e.Location);
@@ -798,20 +835,13 @@ namespace TreeTea
             if (nodes == null || nodes.Count() == 0)
                 return;
 
-            try
+            foreach (var node in nodes)
             {
-                foreach (var node in nodes)
-                {
-                    //node.StateImageIndex = (int)CheckedState.Uninitialised;
-                    SetCheckedState(node, CheckedState.Uninitialised);
+                //node.StateImageIndex = (int)CheckedState.Uninitialised;
+                SetCheckedState(node, CheckedState.Uninitialised);
 
-                    if (hideCheckboxesOfChildren)
-                        HideCheckbox(node.Nodes.Cast<TreeNode>(), hideCheckboxesOfChildren);
-                }
-            }
-            catch (Exception ex)
-            {
-                HandleException(ex);
+                if (hideCheckboxesOfChildren)
+                    HideCheckbox(node.Nodes.Cast<TreeNode>(), hideCheckboxesOfChildren);
             }
         }
 
@@ -904,20 +934,13 @@ namespace TreeTea
             if (nodes == null || nodes.Count() == 0)
                 return;
 
-            try
+            foreach (var node in nodes)
             {
-                foreach (var node in nodes)
-                {
-                    if ((CheckedState)node.StateImageIndex == CheckedState.Uninitialised)
-                        SetCheckedState(node, CheckedState.Unchecked); //todo: should this somehow be initialized with Checked.Mixed, Checked.Checked, Checked.Unchecked?
+                if ((CheckedState)node.StateImageIndex == CheckedState.Uninitialised)
+                    SetCheckedState(node, CheckedState.Unchecked); //todo: should this somehow be initialized with Checked.Mixed, Checked.Checked, Checked.Unchecked?
 
-                    if (showCheckboxesOfChildren)
-                        ShowCheckbox(node.Nodes.Cast<TreeNode>(), showCheckboxesOfChildren);
-                }
-            }
-            catch (Exception ex)
-            {
-                HandleException(ex);
+                if (showCheckboxesOfChildren)
+                    ShowCheckbox(node.Nodes.Cast<TreeNode>(), showCheckboxesOfChildren);
             }
         }
 
@@ -964,7 +987,7 @@ namespace TreeTea
                 return CheckedState.Uninitialised;
 
             //also, if tristate is disabled, we will not check the nodes children to determine this nodes state
-            if(!IsTriStateEnabled)
+            if (!IsTriStateEnabled)
                 return (CheckedState)node.StateImageIndex;
 
             int uncheckedNodes = 0, checkedNodes = 0, mixedNodes = 0;
@@ -1010,7 +1033,7 @@ namespace TreeTea
 
             //Inform everyone that this nodes checkedstate has changed
             if (oldStateImageIndex != node.StateImageIndex)
-                AfterCheck?.Invoke(this, new CheckedStateChangedEventArgs(node, (CheckedState)node.StateImageIndex));
+                InvokeAfterCheckEvent(new CheckedStateChangedEventArgs(node, (CheckedState)node.StateImageIndex));
 
             if (isNodeParentNeedingUpdate && oldStateImageIndex != node.StateImageIndex)
                 UpdateCheckedState(node.Parent, true);
@@ -1034,7 +1057,7 @@ namespace TreeTea
                 //Inform everyone that this nodes checkedstate has changed, at least if it did change
                 //we also don't want to announce a checked change, if there is no checkbox
                 if (oldState != setState && (CheckedState)node.StateImageIndex != CheckedState.Uninitialised)
-                    AfterCheck?.Invoke(this, new CheckedStateChangedEventArgs(node, (CheckedState)node.StateImageIndex));
+                    InvokeAfterCheckEvent(new CheckedStateChangedEventArgs(node, (CheckedState)node.StateImageIndex));
 
                 UpdateChildCheckedState(node.Nodes, (CheckedState)node.StateImageIndex);
             }
@@ -1049,46 +1072,53 @@ namespace TreeTea
         /// resulting the node.Checked Property overwriting the stateimageindex</remarks>
         protected void SetCheckedState(TreeNode node, CheckedState setState)
         {
-            //if the user has disabled the Checkboxes in first place, we ain't lettin the user show the checkbox here
-            if (!this.CheckBoxes) setState = CheckedState.Uninitialised;
-
-            //check if the node should have a checkbox at all
-            if (FuncIsCheckboxEnabledForNode != null && !FuncIsCheckboxEnabledForNode(node))
+            try
             {
-                node.StateImageIndex = (int)CheckedState.Uninitialised;
-                return;
-            }
+                //if the user has disabled the Checkboxes in first place, we ain't lettin the user show the checkbox here
+                if (!this.CheckBoxes) setState = CheckedState.Uninitialised;
 
-            //then set the wanted state
-            switch (setState)
-            {
-                case CheckedState.Unchecked:
-                    node.Checked = false;
-                    node.StateImageIndex = (int)CheckedState.Unchecked;
-                    break;
-                case CheckedState.Checked:
-                    node.Checked = true;
-                    node.StateImageIndex = (int)CheckedState.Checked;
-                    break;
-                case CheckedState.Mixed:
-                    //also here, we only allow the mixed state if the TriState is enabled
-                    if (!IsTriStateEnabled)
-                    {
-                        //todo: should we here invert the current state? Or check the childs? i dont knooow
-                        break;
-                    }
-
-                    switch (MixedNodesMode)
-                    {
-                        case MixedStateMode.Checked: node.Checked = true; break;
-                        case MixedStateMode.Unchecked: node.Checked = false; break;
-                    }
-                    node.StateImageIndex = (int)CheckedState.Mixed;
-                    break;
-                default:
-                case CheckedState.Uninitialised:
+                //check if the node should have a checkbox at all
+                if (FuncIsCheckboxEnabledForNode != null && !FuncIsCheckboxEnabledForNode(node))
+                {
                     node.StateImageIndex = (int)CheckedState.Uninitialised;
-                    break;
+                    return;
+                }
+
+                //then set the wanted state
+                switch (setState)
+                {
+                    case CheckedState.Unchecked:
+                        node.Checked = false;
+                        node.StateImageIndex = (int)CheckedState.Unchecked;
+                        break;
+                    case CheckedState.Checked:
+                        node.Checked = true;
+                        node.StateImageIndex = (int)CheckedState.Checked;
+                        break;
+                    case CheckedState.Mixed:
+                        //also here, we only allow the mixed state if the TriState is enabled
+                        if (!IsTriStateEnabled)
+                        {
+                            //todo: should we here invert the current state? Or check the childs? i dont knooow
+                            break;
+                        }
+
+                        switch (MixedNodesMode)
+                        {
+                            case MixedStateMode.Checked: node.Checked = true; break;
+                            case MixedStateMode.Unchecked: node.Checked = false; break;
+                        }
+                        node.StateImageIndex = (int)CheckedState.Mixed;
+                        break;
+                    default:
+                    case CheckedState.Uninitialised:
+                        node.StateImageIndex = (int)CheckedState.Uninitialised;
+                        break;
+                }
+            }
+            catch (Exception ex)
+            {
+                HandleException(ex);
             }
         }
 
