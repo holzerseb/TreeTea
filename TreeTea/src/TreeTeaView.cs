@@ -27,8 +27,6 @@ namespace TreeTea
          * 
          * maybe let the user disable "check childs if parent is checked" - i dont know this idea sounds stupid
          * 
-         * check task manager
-         * 
          * */
 
 
@@ -125,7 +123,10 @@ namespace TreeTea
         public bool EnableDoubleBuffering { get; set; }
 
         /// <summary>
-        /// Function to handle exceptions. If this is null, the exception will be thrown
+        /// <para>Function to handle exceptions. If this is null, the exception will be thrown</para>
+        /// <para>This is used to catch "common" (rather "expected") exceptions, like if you try to set mixed state while tristate is disabled -
+        /// fatal exceptions (aka exceptions that will cause severe damage to the treeView) still get thrown</para>
+        /// <para>I've introduced this, because I didn't want to try/catch every method where exceptions can occur</para>
         /// </summary>
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         [Browsable(false)] //ExceptionHandler should not be exposed to the Property Window
@@ -494,8 +495,6 @@ namespace TreeTea
             if (from == null) { HandleException(new NullReferenceException("The Source-Node cannot be null.")); return; }
             if (to == null) { HandleException(new NullReferenceException("The Target-Node cannot be null.")); return; }
 
-            SelectHiddenNodesAlsoOnShift = false;
-
             #region Local Functions
             //I declare a local function to toggle nodes, because we have to ensure, that the two passed nodes
             //definitly are toggled to true
@@ -528,8 +527,8 @@ namespace TreeTea
                                 //we go the paths along the parents up, until we can go to the next sibling, as long as there exist some parents
                                 while (start.Level != 0)
                                 {
-                                    start = start.Parent;
-                                    if (start.NextNode != null)
+                                    start = start?.Parent;
+                                    if (start?.NextNode != null)
                                     {
                                         start = start.NextNode;
                                         break;
@@ -570,10 +569,18 @@ namespace TreeTea
                 while (fromAncestor.Level > sharedParentLevel) fromAncestor = fromAncestor?.Parent;
                 while (toAncestor.Level > sharedParentLevel) toAncestor = toAncestor?.Parent;
                 //then we can continue to search the shared parent
-                while (fromAncestor.Parent != toAncestor.Parent)
+                try
                 {
-                    fromAncestor = fromAncestor.Parent;
-                    toAncestor = toAncestor.Parent;
+                    while (fromAncestor.Parent != toAncestor.Parent)
+                    {
+                        fromAncestor = fromAncestor.Parent;
+                        toAncestor = toAncestor.Parent;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    HandleException(new Exception(String.Format("An error occured while searching the shared parent of the nodes '{0}' and '{1}'", from.Text, to.Text), ex));
+                    return;
                 }
 
                 //okay, now we have found the ancestor of both nodes, which share the same parent
@@ -807,9 +814,17 @@ namespace TreeTea
             set
             {
                 funcIsCheckboxEnabledForNode = value;
-                if (CheckBoxes) ShowAllCheckboxes(); //ShowAllCheckboxes automatically takes advantage of the isCheckboxEnabledForNode Function
+                if (CheckBoxes) UpdateAllCheckboxes(); //UpdateAllCheckboxes automatically takes advantage of the isCheckboxEnabledForNode Function
             }
         }
+
+        /// <summary>
+        /// <para>This function is used to determine the initial checkbox-state, after the checkbox has been shown for a node.</para>
+        /// <para>Use this function to set custom default values for each single node. If this function is null, the initial CheckedState is Unchecked</para>
+        /// </summary>
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        [Browsable(false)]
+        public Func<TreeNode, CheckedState> FuncSetInitialCheckedState { get; set; }
 
         /// <summary>
         /// <para>Enable this, to prevent the Nodes to expand/collapse by a double-click onto the checkboxes.</para>
@@ -838,7 +853,7 @@ namespace TreeTea
             //We initialize all node
             checkedChangedSemaphore++;
             foreach (TreeNode node in this.Nodes)
-                UpdateCheckedState(node);
+                InheritCheckedStateFromChilds(node);
             checkedChangedSemaphore--;
         }
 
@@ -870,7 +885,7 @@ namespace TreeTea
                 return;
             checkedChangedSemaphore++;
 
-            UpdateCheckedState(e.Node);
+            InheritCheckedStateFromChilds(e.Node);
             checkedChangedSemaphore--;
         }
 
@@ -895,10 +910,10 @@ namespace TreeTea
             if (IsTriStateEnabled)
             {
                 //and require all children of the node to update themself
-                UpdateChildCheckedState(e.Node.Nodes, (CheckedState)e.Node.StateImageIndex);
+                InheritCheckedStateFromChilds(e.Node.Nodes, (CheckedState)e.Node.StateImageIndex);
 
                 //also, the ancestors might need to change its state
-                UpdateCheckedState(e.Node.Parent, true); //we can check first gen childs only here, because only one child of the parent has changed: e.Node
+                InheritCheckedStateFromChilds(e.Node.Parent, true); //we can check first gen childs only here, because only one child of the parent has changed: e.Node
             }
 
             checkedChangedSemaphore--;
@@ -1118,7 +1133,19 @@ namespace TreeTea
             foreach (var node in nodes)
             {
                 if ((CheckedState)node.StateImageIndex == CheckedState.Uninitialised)
-                    SetCheckedState(node, CheckedState.Unchecked); //todo: should this somehow be initialized with Checked.Mixed, Checked.Checked, Checked.Unchecked?
+                {
+                    //this Try/Catch is solely for the FuncSetinitial blabla thing, because we dont know what the user puts in here
+                    //the setcheckedstate handles its exceptions on its own
+                    try
+                    {
+                        SetCheckedState(node, FuncSetInitialCheckedState?.Invoke(node) ?? CheckedState.Unchecked);
+                    }
+                    catch (Exception ex)
+                    {
+                        HandleException(new Exception(String.Format("An error occured while determining the initial CheckedState of the node {0}", node.Text), ex));
+                        SetCheckedState(node, CheckedState.Unchecked);
+                    }
+                }
 
                 if (showCheckboxesOfChildren)
                     ShowCheckbox(node.Nodes.Cast<TreeNode>(), showCheckboxesOfChildren);
@@ -1137,7 +1164,62 @@ namespace TreeTea
 
         #endregion
 
-        #region Update Checked State
+        #region Update Checkbox Visibility
+
+        /// <summary>
+        /// <para>Updates the visibility of the checkbox for the passed node</para>
+        /// <para>This function does only make sense to use if you have FuncIsCheckboxEnabledForNode set</para>
+        /// </summary>
+        /// <param name="nodes"></param>
+        /// <param name="updateChildrensCheckboxes"></param>
+        public void UpdateCheckbox(TreeNodeCollection nodes, bool updateChildrensCheckboxes)
+        {
+            if (nodes.Count == 0) return;
+            UpdateCheckbox(nodes.Cast<TreeNode>(), updateChildrensCheckboxes);
+        }
+
+        /// <summary>
+        /// <para>Updates the visibility of the checkbox for the passed node</para>
+        /// <para>This function does only make sense to use if you have FuncIsCheckboxEnabledForNode set</para>
+        /// </summary>
+        /// <param name="nodes"></param>
+        /// <param name="updateChildrensCheckboxes"></param>
+        public void UpdateCheckbox(IEnumerable<TreeNode> nodes, bool updateChildrensCheckboxes)
+        {
+            if (nodes == null || nodes.Count() == 0)
+                return;
+
+            foreach (var node in nodes)
+            {
+                //this Try/Catch is solely for the FuncSetinitial blabla thing, because we dont know what the user puts in here
+                //the setcheckedstate handles its exceptions on its own
+                try
+                {
+                    SetCheckedState(node, FuncSetInitialCheckedState?.Invoke(node) ?? CheckedState.Unchecked);
+                }
+                catch (Exception ex)
+                {
+                    HandleException(new Exception(String.Format("An error occured while determining the initial CheckedState of the node {0}", node.Text), ex));
+                    SetCheckedState(node, CheckedState.Unchecked);
+                }
+
+                if (updateChildrensCheckboxes)
+                    UpdateCheckbox(node.Nodes, updateChildrensCheckboxes);
+            }
+        }
+
+        /// <summary>
+        /// <para>Updates the visibility of the checkbox for the passed node</para>
+        /// <para>This function does only make sense to use if you have FuncIsCheckboxEnabledForNode set</para>
+        /// </summary>
+        public void UpdateAllCheckboxes()
+        {
+            UpdateCheckbox(this.Nodes, true);
+        }
+
+        #endregion
+
+        #region Update Checked State by checking the Childs
 
         public delegate void CheckedStateChangedEventHandler(object sender, CheckedStateChangedEventArgs e);
         public new event CheckedStateChangedEventHandler AfterCheck;
@@ -1148,9 +1230,9 @@ namespace TreeTea
         /// <param name="node"></param>
         /// <param name="checkDirectChildsOnly"></param>
         /// <returns></returns>
-        protected CheckedState UpdateCheckedState(TreeNode node)
+        protected CheckedState InheritCheckedStateFromChilds(TreeNode node)
         {
-            return UpdateCheckedState(node, false);
+            return InheritCheckedStateFromChilds(node, false);
         }
 
         /// <summary>
@@ -1161,7 +1243,7 @@ namespace TreeTea
         /// <para>If this is true, this method only checks the first generation childs (for a better performance).</para>
         /// <para>Set this to true, if the childs of the passed node have just recently been updated, otherwise you might get wrong results</para></param>
         /// <returns>The new/current CheckedState of the passed node</returns>
-        protected CheckedState UpdateCheckedState(TreeNode node, bool isNodeParentNeedingUpdate)
+        protected CheckedState InheritCheckedStateFromChilds(TreeNode node, bool isNodeParentNeedingUpdate)
         {
             //there aint no node, then there aint nothin to do
             if (node == null)
@@ -1176,7 +1258,7 @@ namespace TreeTea
             //we determine the state of the childs to find out the state of the current node
             foreach (TreeNode childNode in node.Nodes)
             {
-                switch (isNodeParentNeedingUpdate ? UpdateCheckedState(childNode) : (CheckedState)childNode.StateImageIndex)
+                switch (isNodeParentNeedingUpdate ? InheritCheckedStateFromChilds(childNode) : (CheckedState)childNode.StateImageIndex)
                 {
                     case CheckedState.Unchecked:
                         uncheckedNodes++;
@@ -1217,7 +1299,7 @@ namespace TreeTea
                 InvokeAfterCheckEvent(new CheckedStateChangedEventArgs(node, (CheckedState)node.StateImageIndex));
 
             if (isNodeParentNeedingUpdate && oldStateImageIndex != node.StateImageIndex)
-                UpdateCheckedState(node.Parent, true);
+                InheritCheckedStateFromChilds(node.Parent, true);
 
             return (CheckedState)node.StateImageIndex;
         }
@@ -1228,7 +1310,7 @@ namespace TreeTea
         /// </summary>
         /// <param name="nodes"></param>
         /// <param name="setState"></param>
-        protected void UpdateChildCheckedState(TreeNodeCollection nodes, CheckedState setState)
+        protected void InheritCheckedStateFromChilds(TreeNodeCollection nodes, CheckedState setState)
         {
             foreach (TreeNode node in nodes)
             {
@@ -1240,7 +1322,7 @@ namespace TreeTea
                 if (oldState != setState && (CheckedState)node.StateImageIndex != CheckedState.Uninitialised)
                     InvokeAfterCheckEvent(new CheckedStateChangedEventArgs(node, (CheckedState)node.StateImageIndex));
 
-                UpdateChildCheckedState(node.Nodes, (CheckedState)node.StateImageIndex);
+                InheritCheckedStateFromChilds(node.Nodes, (CheckedState)node.StateImageIndex);
             }
         }
 
@@ -1259,7 +1341,7 @@ namespace TreeTea
                 if (!this.CheckBoxes) setState = CheckedState.Uninitialised;
 
                 //check if the node should have a checkbox at all
-                if (FuncIsCheckboxEnabledForNode != null && !FuncIsCheckboxEnabledForNode(node))
+                if (!FuncIsCheckboxEnabledForNode?.Invoke(node) ?? false) //i dont know the precedences :(
                 {
                     node.StateImageIndex = (int)CheckedState.Uninitialised;
                     return;
@@ -1280,7 +1362,7 @@ namespace TreeTea
                         //also here, we only allow the mixed state if the TriState is enabled
                         if (!IsTriStateEnabled)
                         {
-                            //todo: should we here invert the current state? Or check the childs? i dont knooow
+                            HandleException(new InvalidOperationException(String.Format("There was an attempt to set \"Mixed\"-state for node {0}, but the TriState-mode is disabled.", node.Text)));
                             break;
                         }
 
