@@ -24,6 +24,16 @@ namespace TreeTea
         {
             return (CheckedState)node.StateImageIndex;
         }
+
+        public static bool IsSelected(this TreeNode node)
+        {
+            if (node.TreeView == null) throw new InvalidOperationException("The passed node is not assigned to any treeview and cannot have a selected state");
+
+            if (node.TreeView is TreeTeaView)
+                return ((TreeTeaView)node.TreeView).SelectedNodes.Contains(node);
+            else
+                return node.IsSelected;
+        }
     }
 
     /// <summary>
@@ -46,6 +56,18 @@ namespace TreeTea
         public CheckedStateChangedEventArgs(TreeNode node, CheckedState checkedState, TreeViewAction action) : base(node, action)
         {
             this.CheckedState = checkedState;
+        }
+    }
+
+    public class NodeSelectedEventArgs : EventArgs
+    {
+        public TreeNode RecentlySelectedNode { get; set; }
+        public List<TreeNode> AllSelectedNodes { get; set; }
+
+        public NodeSelectedEventArgs(TreeNode lastSelectedNode, List<TreeNode> selectedNodes)
+        {
+            this.RecentlySelectedNode = lastSelectedNode;
+            this.AllSelectedNodes = selectedNodes;
         }
     }
 }

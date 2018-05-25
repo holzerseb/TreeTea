@@ -25,13 +25,9 @@ namespace TreeTea
     {
         /* TODOS
          * 
-         * maybe let the user disable "check childs if parent is checked"
+         * maybe let the user disable "check childs if parent is checked" - i dont know this idea sounds stupid
          * 
          * check task manager
-         * 
-         * multiselection with shift
-         * 
-         * event on selectednode
          * 
          * */
 
@@ -54,6 +50,7 @@ namespace TreeTea
             SupressCheckboxDoubleClick = true;
             IsMultiSelectionEnabled = true;
             IsTriStateEnabled = true;
+            ClearSelectionOnExpand = ClearSelectionOnExpandMode.BeforeExpand;
 
             /*Members*/
             selectedNode = null;
@@ -246,6 +243,22 @@ namespace TreeTea
         }
 
         /// <summary>
+        /// Mode to determine, if the current selection should be cleared when expanding/collapsing and if, whether it should
+        /// happen before of after the expand/collapse
+        /// </summary>
+        [Flags]
+        public enum ClearSelectionOnExpandMode
+        {
+            DoNotClearSelection = 0,
+            BeforeExpand = 1,
+            BeforeCollapse = 2,
+            BeforeExpandAndCollapse = 3,
+            AfterExpand = 4,
+            AfterCollapse = 8,
+            AfterExpandAndCollapse = 12,
+        }
+
+        /// <summary>
         /// Select a mode, in which the MultiSelection will work. You can restrict Multiselection to Same Level, Parent or Type of Tag Object and/or combine them.
         /// </summary>
         [Category("TreeTea Multi-Selection")]
@@ -260,6 +273,24 @@ namespace TreeTea
         [Description("If this is true, MultiSelection is enabled. Who would have guessed?")]
         [DefaultValue(true)]
         public bool IsMultiSelectionEnabled { get; set; }
+
+        /// <summary>
+        /// If this is true and the user selects a range of nodes with the SHIFT-Key, then also nodes which are not visible (=Parent not expanded) will be selected. Default is false
+        /// </summary>
+        /// <remarks>The default behaviour for most applications is that only visible nodes will be selected</remarks>
+        [Category("TreeTea Multi-Selection")]
+        [Description("If this is true and the user selects a range of nodes with the SHIFT-Key, then also nodes which are not visible (=Parent not expanded) will be selected. Default is false")]
+        [DefaultValue(false)]
+        protected bool SelectHiddenNodesAlsoOnShift { get; set; }
+
+        /// <summary>
+        /// Use this to define, wheter expanding/collapsing a node will clear the current selection
+        /// </summary>
+        /// <remarks>Default behaviour for most application is that this is true</remarks>
+        [Category("TreeTea Multi-Selection")]
+        [Description("If this is true, the current selection will be cleared if any node gets expanded/collapsed")]
+        [DefaultValue(ClearSelectionOnExpandMode.BeforeExpand)]
+        protected ClearSelectionOnExpandMode ClearSelectionOnExpand { get; set; }
 
         #endregion
 
@@ -294,6 +325,22 @@ namespace TreeTea
             }
         }
 
+        protected override void OnBeforeCollapse(TreeViewCancelEventArgs e)
+        {
+            //OnBeforeExpand can be found in the TriState region -> overrides, because for the most parts, it belongs there
+            if (ClearSelectionOnExpand.HasFlag(ClearSelectionOnExpandMode.BeforeExpand))
+                ClearSelection();
+            base.OnBeforeCollapse(e);
+        }
+
+        protected override void OnAfterCollapse(TreeViewEventArgs e)
+        {
+            //OnAfterExpand can be found in the TriState region -> overrides, because for the most parts, it belongs there
+            if (ClearSelectionOnExpand.HasFlag(ClearSelectionOnExpandMode.AfterExpand))
+                ClearSelection();
+            base.OnAfterCollapse(e);
+        }
+
         protected override void OnMouseDown(MouseEventArgs e)
         {
             NodeClicked(e);
@@ -320,7 +367,7 @@ namespace TreeTea
                     base.OnMouseDown(e);
                     return;
                 }
-                
+
                 //For more info about treeviewhittestinfo, see https://msdn.microsoft.com/en-us/library/system.windows.forms.treeviewhittestinfo(v=vs.110).aspx; shits convinient
                 TreeViewHitTestInfo hitInfo = base.HitTest(e.Location);
                 if (hitInfo.Location == TreeViewHitTestLocations.Label || (SelectNodeOnImageClick && hitInfo.Location == TreeViewHitTestLocations.Image))
@@ -339,6 +386,17 @@ namespace TreeTea
         #endregion
 
         #region Node-Selection Methods
+
+        /// <summary>
+        /// Handler for NodeSelected; Always contains the most recently selected node as well as all currently selected nodes
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="eventArgs"></param>
+        public delegate void NodeSelectedEventHandler(object sender, NodeSelectedEventArgs e);
+        /// <summary>
+        /// Occurs once a new node has been selected (after AfterSelect) and returns also a list of all currently selected nodes
+        /// </summary>
+        public event NodeSelectedEventHandler NodeSelected;
 
         /// <summary>
         /// This will either select or unselect the passed node
@@ -370,6 +428,7 @@ namespace TreeTea
                 try
                 {
                     selectedNode = node;
+                    NodeSelected?.Invoke(this, new NodeSelectedEventArgs(selectedNode, selectedNodes));
 
                     node.BackColor = System.Drawing.SystemColors.Highlight;
                     node.ForeColor = System.Drawing.SystemColors.HighlightText;
@@ -422,18 +481,134 @@ namespace TreeTea
             //if there is no node selected, select the passed one;
             //do this also, if user wants to add a node to the selection
             if (IsMultiSelectionEnabled && (selectedNode == null || ModifierKeys == Keys.Control))
-            {
                 ToggleNode(node);
-            }
-            else if (ModifierKeys == Keys.Shift)
+            else if (IsMultiSelectionEnabled && ModifierKeys == Keys.Shift)
+                SelectNode(selectedNodes.Last(), node);
+            else
+                ClearSelectionAndSelect(node);
+            this.EndUpdate();
+        }
+
+        protected void SelectNode(TreeNode from, TreeNode to)
+        {
+            if (from == null) { HandleException(new NullReferenceException("The Source-Node cannot be null.")); return; }
+            if (to == null) { HandleException(new NullReferenceException("The Target-Node cannot be null.")); return; }
+
+            SelectHiddenNodesAlsoOnShift = false;
+
+            #region Local Functions
+            //I declare a local function to toggle nodes, because we have to ensure, that the two passed nodes
+            //definitly are toggled to true
+            TreeNode initialFrom = from, initialTo = to;
+            var ToggleNode = new Action<TreeNode>((x) =>
             {
-                //throw new NotImplementedException();
+                if (x == initialFrom || x == initialTo) this.ToggleNode(x, true);
+                else this.ToggleNode(x);
+            });
+            //and an additional function for selecting all nodes between two nodes
+            var SelectWalkingDown = new Action<TreeNode, TreeNode>((start, end) =>
+            {
+                while (start != end)
+                {
+                    if (SelectHiddenNodesAlsoOnShift)
+                        start = start?.NextVisibleNode;
+                    else
+                    {
+                        if (start?.Nodes.Count > 0)
+                            start = start?.Nodes[0]; //If there are childs, select the first
+                        else if (start?.NextNode != null)
+                            start = start?.NextNode; //If there is a sibling, select the sibling
+                        else
+                        {
+                            //In this case, the next child is a sibling of one of the nodes ancestors
+                            if (start?.Parent?.NextNode != null)
+                                start = start?.Parent?.NextNode; //the parents sibling is our next node
+                            else
+                            {
+                                //we go the paths along the parents up, until we can go to the next sibling, as long as there exist some parents
+                                while (start.Level != 0)
+                                {
+                                    start = start.Parent;
+                                    if (start.NextNode != null)
+                                    {
+                                        start = start.NextNode;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if (start == null) break;
+                    ToggleNode(start);
+                }
+            });
+            #endregion
+
+            if (from.Parent == to.Parent)
+            {
+                //if the nodes share the same parent, this is going to be easy
+                if (from.Index == to.Index)
+                    return; //obviously
+                else
+                {
+                    //if from is further down than to, we have to swap them
+                    if (from.Index > to.Index) { var tmp = from; from = to; to = tmp; }
+                    //then select all visibles nodes going down
+                    ToggleNode(from);
+                    SelectWalkingDown(from, to);
+                }
             }
             else
             {
-                ClearSelectionAndSelect(node);
+                //this is going to be complicated...
+                //we search for a shared parent, because then we can determine whether from or to is "above"
+                TreeNode fromAncestor = from, toAncestor = to;
+                int sharedParentLevel = Math.Min(fromAncestor.Level, toAncestor.Level); //lower level to match up the parent
+
+                //to find the shared parent, we first have to determine the ancestors on the same level
+                while (fromAncestor.Level > sharedParentLevel) fromAncestor = fromAncestor?.Parent;
+                while (toAncestor.Level > sharedParentLevel) toAncestor = toAncestor?.Parent;
+                //then we can continue to search the shared parent
+                while (fromAncestor.Parent != toAncestor.Parent)
+                {
+                    fromAncestor = fromAncestor.Parent;
+                    toAncestor = toAncestor.Parent;
+                }
+
+                //okay, now we have found the ancestor of both nodes, which share the same parent
+                //we can continue selecting the node, kinda similiar to above
+                if (fromAncestor == toAncestor)
+                {
+                    //here we know, that one of the clicked node its ancestor as well, meaning that the node on the lower
+                    //level must be below - so we can select going down to the node on the lower level
+                    if (from.Level > to.Level) { var tmp = from; from = to; to = tmp; }
+                    //and select walking down
+                    ToggleNode(from);
+                    SelectWalkingDown(from, to);
+                }
+                else
+                {
+                    //in that case, we have to check whether we have to "go down" or "go up" and swap iff we have to "go up"
+                    if (fromAncestor.Index > toAncestor.Index) { var tmp = from; from = to; to = tmp; }
+                    //now we simply have to go down
+                    ToggleNode(from);
+                    SelectWalkingDown(from, to);
+                }
             }
-            this.EndUpdate();
+        }
+
+        /// <summary>
+        /// This will set the selected-state of all the childs of the given parent to the same as the parent recursivly. The parent will not be toggled.
+        /// </summary>
+        /// <param name="parent">Node, whose childs will be selected</param>
+        protected void SelectChildNodes(TreeNode parent)
+        {
+            foreach (TreeNode child in parent.Nodes)
+            {
+                ToggleNode(child, parent.IsSelected());
+                SelectChildNodes(child);
+            }
         }
 
         /// <summary>
@@ -669,6 +844,9 @@ namespace TreeTea
 
         protected override void OnBeforeExpand(TreeViewCancelEventArgs e)
         {
+            //Some code for the MultiSelection...
+            if (ClearSelectionOnExpand.HasFlag(ClearSelectionOnExpandMode.BeforeExpand))
+                ClearSelection();
             base.OnBeforeExpand(e);
 
             if (checkedChangedSemaphore > 0)
@@ -683,6 +861,9 @@ namespace TreeTea
 
         protected override void OnAfterExpand(TreeViewEventArgs e)
         {
+            //Some code for the MultiSelection...
+            if (ClearSelectionOnExpand.HasFlag(ClearSelectionOnExpandMode.AfterExpand))
+                ClearSelection();
             base.OnAfterExpand(e);
 
             if (checkedChangedSemaphore > 0)
@@ -1201,6 +1382,7 @@ namespace TreeTea
                     innerEx = innerEx.InnerException;
                 }
                 Console.WriteLine(message);
+                Debugger.Break();
             });
         }
 
