@@ -23,9 +23,11 @@ namespace TreeTea
     [Designer("System.Windows.Forms.Design.ParentControlDesigner, System.Design", typeof(IDesigner))]
     public partial class TreeTeaView : TreeView
     {
-        /* TODOS
+        /* TODOS / IDEAS
          * 
          * maybe let the user disable "check childs if parent is checked" - i dont know this idea sounds stupid
+         * 
+         * test the funcsetinitialstate
          * 
          * */
 
@@ -48,6 +50,7 @@ namespace TreeTea
             SupressCheckboxDoubleClick = true;
             IsMultiSelectionEnabled = true;
             IsTriStateEnabled = true;
+            CheckBoxes = true;
             ClearSelectionOnExpand = ClearSelectionOnExpandMode.BeforeExpand;
 
             /*Members*/
@@ -144,6 +147,8 @@ namespace TreeTea
         /// <summary>
         /// Property for the current (node set most recently) node
         /// </summary>
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        [Browsable(false)] //i really have no clue why designer wanted to show this
         public new TreeNode SelectedNode
         {
             get { return selectedNode; }
@@ -162,6 +167,8 @@ namespace TreeTea
         /// <summary>
         /// Property for all selected nodes
         /// </summary>
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        [Browsable(false)] //i really have no clue why designer wanted to show this
         public IEnumerable<TreeNode> SelectedNodes
         {
             get { return selectedNodes; }
@@ -781,7 +788,7 @@ namespace TreeTea
         /// but instead we use "self-drawn" images in the stateimage of the nodes to simulate checkboxes</remarks>
         [Category("TreeTea TriState")]
         [Description("Gets or sets a value indicating whether check boxes are displayed next to the tree nodes in the tree view control")]
-        [DefaultValue(false)]
+        [DefaultValue(true)]
         new public bool CheckBoxes
         {
             get => isCheckBoxesEnabled;
