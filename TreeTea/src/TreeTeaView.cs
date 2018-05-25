@@ -289,7 +289,7 @@ namespace TreeTea
         [Category("TreeTea Multi-Selection")]
         [Description("If this is true and the user selects a range of nodes with the SHIFT-Key, then also nodes which are not visible (=Parent not expanded) will be selected. Default is false")]
         [DefaultValue(false)]
-        protected bool SelectHiddenNodesAlsoOnShift { get; set; }
+        public bool SelectHiddenNodesAlsoOnShift { get; set; }
 
         /// <summary>
         /// Use this to define, wheter expanding/collapsing a node will clear the current selection
@@ -298,7 +298,7 @@ namespace TreeTea
         [Category("TreeTea Multi-Selection")]
         [Description("If this is true, the current selection will be cleared if any node gets expanded/collapsed")]
         [DefaultValue(ClearSelectionOnExpandMode.BeforeExpand)]
-        protected ClearSelectionOnExpandMode ClearSelectionOnExpand { get; set; }
+        public ClearSelectionOnExpandMode ClearSelectionOnExpand { get; set; }
 
         #endregion
 

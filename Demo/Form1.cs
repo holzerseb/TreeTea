@@ -33,6 +33,9 @@ namespace Demo
             treeTea.SelectNodeOnImageClick = true; //lets you select the node by clicking the node image
 
             //add an exception handler to handle all exceptions, useful if you have a dedicated error message system
+            //note, that this will throw "expected" exceptions, like if you try to set mixed checked state while tristate is disabled
+            //fatal exceptions, which cause severe damage to the treeview will still cause a throw.
+            //This Handler is meant to catch common exceptions in critical areas
             treeTea.ExceptionHandler = new Action<Exception>((ex) =>
             {
                 Console.WriteLine();
@@ -62,6 +65,15 @@ namespace Demo
             //set a single node
             treeTea.SelectedNode = treeTea.Nodes[1];
 
+            //let the selection clear, if the user expands or collapses any node, but before the BeforeExpand event
+            treeTea.ClearSelectionOnExpand = TreeTeaView.ClearSelectionOnExpandMode.BeforeExpandAndCollapse;
+
+            //enable the selection of hidden nodes, when selecting with the shift-key
+            treeTea.SelectHiddenNodesAlsoOnShift = true;
+
+            //subscribe the new NodeSelected event (fired after AfterSelect, which focuses on the selected nodes
+            treeTea.NodeSelected += TreeTea_NodeSelected; //see into method for more info
+
 
             /* TriState */
 
@@ -84,6 +96,13 @@ namespace Demo
                 return node.Text.StartsWith("Node2") || node.Text == "Node11" || node.Text == "Node36" || node.Text == "Node37";
             });
 
+            //set the initial checked state for a node
+            treeTea.FuncSetInitialCheckedState = new Func<TreeNode, CheckedState>((node) =>
+            {
+                if (node.Text.StartsWith("Node2")) return CheckedState.Checked;
+                else return CheckedState.Unchecked;
+            });
+
             //hide the checkbox of a single node
             treeTea.HideCheckbox(treeTea.Nodes[2]); //since the FuncIsCheckboxEnabledForNode property is set, this only works, since this node has the checkbox enabled
 
@@ -98,14 +117,36 @@ namespace Demo
 
             //yeah, idk maybe
             //use the treetea and provide some suggestions, in case you need more or have something i could/should improve
-            //sebi@holzers.de
+            //iDontCareAboutYourEmails@holzers.de
             //http://holzers.de/
+        }
+
+        private void TreeTea_NodeSelected(object sender, NodeSelectedEventArgs e)
+        {
+            //get the most recently selected node
+            var lastSelectedNode = e.RecentlySelectedNode;
+
+            //get a list of all currently selected nodes
+            var allCurrentlySelectedNodes = e.AllSelectedNodes;
+        }
+
+        private void TreeTea_AfterCheck(object sender, CheckedStateChangedEventArgs e)
+        {
+            Console.WriteLine(String.Format("The node {0} is now {2} has changed its checkedState: {1}", e.Node.Text, /*e.CheckedState.ToString()*/ e.Node.GetCheckedState(), e.Node.Checked ? "checked" : "unchecked"));
         }
 
         private void button1_Click(object sender, EventArgs e)
         {
-            treeTea.CheckBoxes = !treeTea.CheckBoxes;
-            Console.WriteLine(String.Format("Checkboxes are {0}", treeTea.CheckBoxes ? "enabled" : "disabled"));
+            treeTea.CheckBoxes = true;
+            treeTea.FuncIsCheckboxEnabledForNode = new Func<TreeNode, bool>((node) =>
+            {
+                //return node.Index % 2 == 1;
+                //return node.Text.StartsWith("Node2") || node.Text == "Node11" || node.Text == "Node36" || node.Text == "Node37";
+                return node.Text == "Node2" || node.Text == "Node26";
+            });
+
+            //treeTea.CheckBoxes = !treeTea.CheckBoxes;
+            //Console.WriteLine(String.Format("Checkboxes are {0}", treeTea.CheckBoxes ? "enabled" : "disabled"));
         }
 
         //private int mode = 0;
@@ -124,11 +165,6 @@ namespace Demo
             //    return node.Text.StartsWith("Node2") || node.Text == "Node11" || node.Text == "Node36" || node.Text == "Node37";
             //    });
             //else treeTea.FuncIsCheckboxEnabledForNode = null;
-        }
-
-        private void TreeTea_AfterCheck(object sender, CheckedStateChangedEventArgs e)
-        {
-            Console.WriteLine(String.Format("The node {0} is now {2} has changed its checkedState: {1}", e.Node.Text, /*e.CheckedState.ToString()*/ e.Node.GetCheckedState(), e.Node.Checked ? "checked" : "unchecked"));
         }
     }
 }
