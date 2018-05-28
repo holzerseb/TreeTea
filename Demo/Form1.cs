@@ -43,6 +43,39 @@ namespace Demo
                 Console.WriteLine();
             });
 
+            //save the current expansion state and save the current scroll position
+            var expansionState = treeTea.GetExpansionState(out Point scrollPosition);
+            //restore the expansion state
+            treeTea.SetExpansionState(expansionState);
+            //aand since that operation might screw the current scroll position (="which nodes are visible")
+            treeTea.SetScrollPosition(scrollPosition); //you can actually pass the scrollposition with the setexpansionstate method...
+
+            //I've added some convenient extensions
+            TreeNode someNode = treeTea.Nodes[0];           //ignore this for now
+            dynamic data; bool success;                     //some declarations
+            TreeNode node; List<dynamic> dataList;
+
+            //there are various convenient methods to directly access the tag of a node like:
+            data = someNode.GetTag<int>();                  //Get casted Tag directly
+            success = someNode.GetTag(out data);            //Get casted Tag and a boolean value whether cast was successful
+            data = someNode.IsTagOfType<int>();             //yeah guess what this is
+            success = someNode.GetAncestorTag(out data);    //Searches all ancestors of the node for a tag of the type of data
+            success = ((TreeView)treeTea)                   //get the casted tag of the currently selected node
+                .GetSelectedTag(out dataList);
+            success = treeTea.GetSelectedTag(out dataList); //get the casted tags of the currently selected nodes (only treeteaview)
+            success = treeTea.GetSelectedTagOfAncestor(out data);       //searches all ancestors for a tag of the given type
+
+            //maybe you have some custom treenodes, that you can easily retrieve with the following:
+            success = someNode.GetAncestorOfType(out node);             //search an ancestor of the given type (derived from TreeNode)
+            success = someNode.GetAncestorWhere(                        //get an ancestor, where a custom function is true
+                new Func<TreeNode, bool>((x) => x.Text == "Node21"),
+                out node);
+            success = treeTea.GetSelectedNode(out node);                //cast the currently selected node to a specific type (derive TreeNode)
+
+            //you can also retrieve all descendants
+            var descendants = treeTea.Nodes.Descendants<TreeNode>();
+            descendants = treeTea.Nodes.Descendants<TreeNode>(new Func<TreeNode, bool>((whateverNode) => node.Text.StartsWith("Node2")));
+
 
             /* MultiSelection */
 
@@ -90,16 +123,16 @@ namespace Demo
             treeTea.SupressCheckboxDoubleClick = true; //default anyway
 
             //function to only enable checkbox for some specific nodes
-            treeTea.FuncIsCheckboxEnabledForNode = new Func<TreeNode, bool>((node) =>
+            treeTea.FuncIsCheckboxEnabledForNode = new Func<TreeNode, bool>((whateverNode) =>
             {
                 //return node.Index % 2 == 1;
-                return node.Text.StartsWith("Node2") || node.Text == "Node11" || node.Text == "Node36" || node.Text == "Node37";
+                return whateverNode.Text.StartsWith("Node2") || whateverNode.Text == "Node11" || whateverNode.Text == "Node36" || whateverNode.Text == "Node37";
             });
 
             //set the initial checked state for a node
-            treeTea.FuncSetInitialCheckedState = new Func<TreeNode, CheckedState>((node) =>
+            treeTea.FuncSetInitialCheckedState = new Func<TreeNode, CheckedState>((whateverNode) =>
             {
-                if (node.Text.StartsWith("Node2")) return CheckedState.Checked;
+                if (whateverNode.Text.StartsWith("Node2")) return CheckedState.Checked;
                 else return CheckedState.Unchecked;
             });
 
@@ -152,6 +185,7 @@ namespace Demo
         //private int mode = 0;
         private void button2_Click(object sender, EventArgs e)
         {
+            treeTea.Nodes[0].GetAncestorOfType<TreeNode>();
             treeTea.IsTriStateEnabled = !treeTea.IsTriStateEnabled;
             Console.WriteLine(String.Format("TriState is {0}", treeTea.IsTriStateEnabled ? "enabled" : "disabled"));
 

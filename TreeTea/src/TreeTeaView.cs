@@ -3,7 +3,9 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.ComponentModel.Design;
 using System.Diagnostics;
+using System.Drawing;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -29,10 +31,14 @@ namespace TreeTea
          * 
          * test the funcsetinitialstate
          * 
+         * test the Descendants and all getnode / gettags
+         * 
+         * method to create "relations" aka groups
+         * 
          * */
 
 
-        #region Members and Constructors
+        #region Members, Constructors and other stuff
 
         /* Member and Properties regarding the node selection and MultiSelection can be found in Region "MultiSelection | Node Selection Handling" */
         /* Member and Properties regarding the tristate can be found in Region "TriState | Checkbox Handling" */
@@ -1397,7 +1403,7 @@ namespace TreeTea
         #endregion
 
 
-        #region Altering TreeViews Behaviour
+        #region Altering and Modifying TreeViews Behaviour
 
         /// <summary>
         /// Gets the required creation parameters when the control handle is created.
@@ -1435,6 +1441,81 @@ namespace TreeTea
             }
 
             base.WndProc(ref m);
+        }
+
+        /* Imports for Expansion-State */
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+        private static extern int GetScrollPos(IntPtr hWnd, int nBar);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+        private static extern int SetScrollPos(IntPtr hWnd, int nBar, int nPos, bool bRedraw);
+        private const int SB_HORZ = 0x0;
+        private const int SB_VERT = 0x1;
+
+        /// <summary>
+        /// Get the current expansion state, meaning which nodes are currently expanded
+        /// </summary>
+        /// <returns>List of expanded nodes fullpaths</returns>
+        public List<string> GetExpansionState()
+        {
+            return Nodes.Descendants<TreeNode>()
+                        .Where(n => n.IsExpanded)
+                        .Select(n => n.FullPath)
+                        .ToList();
+        }
+
+        /// <summary>
+        /// Get the current expansion state, meaning which nodes are currently expanded
+        /// </summary>
+        /// <param name="scrollPosition">Returns the position where the treeview is currently scrolled to BEFORE retrieving the expansion state</param>
+        /// <returns>List of expanded nodes fullpaths</returns>
+        public List<string> GetExpansionState(out Point scrollPosition)
+        {
+            scrollPosition = GetScrollPosition();
+            return GetExpansionState();
+        }
+
+        /// <summary>
+        /// Sets the current expansion state, meaning it will expand the nodes in the list
+        /// </summary>
+        /// <param name="savedExpansionState">List with FullPaths of all nodes to expand</param>
+        public void SetExpansionState(List<string> savedExpansionState)
+        {
+            foreach (var node in Nodes.Descendants<TreeNode>().Where(n => n.TreeView != null && savedExpansionState.Contains(n.FullPath)))
+            {
+                node.Expand();
+            }
+        }
+
+        /// <summary>
+        /// Sets the current expansion state, meaning it will expand the nodes in the list and automatically scrolls to the passed position
+        /// </summary>
+        /// <param name="savedExpansionState">List with FullPaths of all nodes to expand</param>
+        /// <param name="scrollPosition">Position where to scroll to after expanding</param>
+        public void SetExpansionState(List<string> savedExpansionState, Point scrollPosition)
+        {
+            SetExpansionState(savedExpansionState);
+            SetScrollPosition(scrollPosition);
+        }
+
+        /// <summary>
+        /// Retrieves the position where the treeview is currently scrolled to
+        /// </summary>
+        /// <returns></returns>
+        public Point GetScrollPosition()
+        {
+            return new Point(
+               GetScrollPos(this.Handle, SB_HORZ),
+               GetScrollPos(this.Handle, SB_VERT));
+        }
+
+        /// <summary>
+        /// Scrolls to the passed point
+        /// </summary>
+        /// <param name="scrollPosition"></param>
+        public void SetScrollPosition(Point scrollPosition)
+        {
+            SetScrollPos(this.Handle, SB_HORZ, scrollPosition.X, true);
+            SetScrollPos(this.Handle, SB_VERT, scrollPosition.Y, true);
         }
 
         #endregion
