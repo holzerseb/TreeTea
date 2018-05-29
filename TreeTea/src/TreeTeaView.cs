@@ -31,8 +31,6 @@ namespace TreeTea
          * 
          * test the funcsetinitialstate
          * 
-         * test the Descendants and all getnode / gettags
-         * 
          * method to create "relations" aka groups
          * 
          * */
@@ -310,6 +308,17 @@ namespace TreeTea
 
         #region Overrides
 
+        /// <summary>
+        /// Handler for BeforeSelect; Always contains the most recently selected node as well as all currently selected nodes
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="eventArgs"></param>
+        public delegate void NodeSelectedCancelEventHandler(object sender, NodeSelectedCancelEventArgs e);
+        /// <summary>
+        /// Occurs before the node is selected
+        /// </summary>
+        /// <remarks>We use this event to hide the native selection method, because remember... the native one is cancer</remarks>
+        public new event NodeSelectedCancelEventHandler BeforeSelect;
         protected override void OnBeforeSelect(TreeViewCancelEventArgs e)
         {
             try
@@ -317,7 +326,6 @@ namespace TreeTea
                 //we have to completly disable the whole unholy native selection handling
                 e.Cancel = true;
                 base.SelectedNode = null;
-
                 base.OnBeforeSelect(e);
             }
             catch (Exception ex)
@@ -326,6 +334,17 @@ namespace TreeTea
             }
         }
 
+        /// <summary>
+        /// Handler for AfterSelect; Always contains the most recently selected node as well as all currently selected nodes
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="eventArgs"></param>
+        public delegate void NodeSelectedEventHandler(object sender, NodeSelectedEventArgs e);
+        /// <summary>
+        /// Occurs after the node is selected
+        /// </summary>
+        /// <remarks>We use this event to hide the native selection method, because remember... the native one is cancer</remarks>
+        public new event NodeSelectedEventHandler AfterSelect;
         protected override void OnAfterSelect(TreeViewEventArgs e)
         {
             try
@@ -402,17 +421,6 @@ namespace TreeTea
         #region Node-Selection Methods
 
         /// <summary>
-        /// Handler for NodeSelected; Always contains the most recently selected node as well as all currently selected nodes
-        /// </summary>
-        /// <param name="sender"></param>
-        /// <param name="eventArgs"></param>
-        public delegate void NodeSelectedEventHandler(object sender, NodeSelectedEventArgs e);
-        /// <summary>
-        /// Occurs once a new node has been selected (after AfterSelect) and returns also a list of all currently selected nodes
-        /// </summary>
-        public event NodeSelectedEventHandler NodeSelected;
-
-        /// <summary>
         /// This will either select or unselect the passed node
         /// </summary>
         /// <param name="node">Node to un/select</param>
@@ -435,6 +443,11 @@ namespace TreeTea
                         return;
                 }
 
+                //Raise the BeforeSelect event
+                var cancelArgs = new NodeSelectedCancelEventArgs(false, TreeViewAction.Unknown);
+                BeforeSelect?.Invoke(this, cancelArgs);
+                if (cancelArgs.Cancel) return;
+
                 //Then perform the selection
                 if (!selectedNodes.Contains(node))
                     selectedNodes.Add(node);
@@ -442,10 +455,12 @@ namespace TreeTea
                 try
                 {
                     selectedNode = node;
-                    NodeSelected?.Invoke(this, new NodeSelectedEventArgs(selectedNode, selectedNodes));
 
                     node.BackColor = System.Drawing.SystemColors.Highlight;
                     node.ForeColor = System.Drawing.SystemColors.HighlightText;
+
+                    //AfterSelect
+                    AfterSelect?.Invoke(this, new NodeSelectedEventArgs(selectedNode, selectedNodes, TreeViewAction.Unknown));
                 }
                 catch (Exception ex)
                 {

@@ -53,17 +53,18 @@ namespace Demo
             //I've added some convenient extensions
             TreeNode someNode = treeTea.Nodes[0];           //ignore this for now
             dynamic data; bool success;                     //some declarations
-            TreeNode node; List<dynamic> dataList;
+            TreeNode node; IEnumerable<dynamic> dataList;
 
             //there are various convenient methods to directly access the tag of a node like:
-            data = someNode.GetTag<int>();                  //Get casted Tag directly
-            success = someNode.GetTag(out data);            //Get casted Tag and a boolean value whether cast was successful
-            data = someNode.IsTagOfType<int>();             //yeah guess what this is
-            success = someNode.GetAncestorTag(out data);    //Searches all ancestors of the node for a tag of the type of data
-            success = ((TreeView)treeTea)                   //get the casted tag of the currently selected node
+            data = someNode.GetTag<int>();                          //Get casted Tag directly
+            success = someNode.GetTag(out data);                    //Get casted Tag and a boolean value whether cast was successful
+            data = someNode.IsTagOfType<int>();                     //yeah guess what this is
+            success = someNode.GetAncestorTag(out data);            //Searches all ancestors of the node for a tag of the type of data
+            success = ((TreeView)treeTea)                           //get the casted tag of the currently selected node
                 .GetSelectedTag(out dataList);
-            success = treeTea.GetSelectedTag(out dataList); //get the casted tags of the currently selected nodes (only treeteaview)
-            success = treeTea.GetSelectedTagOfAncestor(out data);       //searches all ancestors for a tag of the given type
+            success = treeTea.GetSelectedTag(out dataList);         //get the casted tags of the currently selected nodes (only treeteaview)
+            success = treeTea.GetSelectedTags(out dataList);        //get the casted tags of the currently selected nodes (only treeteaview)
+            success = treeTea.GetSelectedTagOfAncestor(out data);   //searches all ancestors for a tag of the given type
 
             //maybe you have some custom treenodes, that you can easily retrieve with the following:
             success = someNode.GetAncestorOfType(out node);             //search an ancestor of the given type (derived from TreeNode)
@@ -71,10 +72,11 @@ namespace Demo
                 new Func<TreeNode, bool>((x) => x.Text == "Node21"),
                 out node);
             success = treeTea.GetSelectedNode(out node);                //cast the currently selected node to a specific type (derive TreeNode)
+            dataList = treeTea.GetSelectedNodesOfType<TreeNode>();       //retrieve all currently selected nodes of a specific type
 
             //you can also retrieve all descendants
             var descendants = treeTea.Nodes.Descendants<TreeNode>();
-            descendants = treeTea.Nodes.Descendants<TreeNode>(new Func<TreeNode, bool>((whateverNode) => node.Text.StartsWith("Node2")));
+            descendants = treeTea.SelectedNode.Descendants<TreeNode>(new Func<TreeNode, bool>((whateverNode) => node.Text.StartsWith("Node2")));
 
 
             /* MultiSelection */
@@ -105,7 +107,7 @@ namespace Demo
             treeTea.SelectHiddenNodesAlsoOnShift = true;
 
             //subscribe the new NodeSelected event (fired after AfterSelect, which focuses on the selected nodes
-            treeTea.NodeSelected += TreeTea_NodeSelected; //see into method for more info
+            treeTea.AfterSelect += TreeTea_NodeSelected; //see into method for more info
 
 
             /* TriState */

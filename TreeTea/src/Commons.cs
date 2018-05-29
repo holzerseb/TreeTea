@@ -68,6 +68,8 @@ namespace TreeTea
         /// <returns></returns>
         public static T GetSelectedNode<T>(this TreeView treeView) where T : TreeNode
         {
+            if (treeView is TreeTeaView)
+                return (T)((TreeTeaView)treeView).SelectedNode;
             return (T)treeView.SelectedNode;
         }
 
@@ -82,7 +84,10 @@ namespace TreeTea
         {
             try
             {
-                data = (T)treeView.SelectedNode;
+                if (treeView is TreeTeaView)
+                    data = (T)((TreeTeaView)treeView).SelectedNode;
+                else
+                    data = (T)treeView.SelectedNode;
                 if (data != null)
                     return true;
             }
@@ -94,6 +99,17 @@ namespace TreeTea
         }
 
         /// <summary>
+        /// Returns a collection of all currently selected nodes, which are of type T
+        /// </summary>
+        /// <typeparam name="T">Must be derived class of TreeNode</typeparam>
+        /// <param name="treeView"></param>
+        /// <returns></returns>
+        public static IEnumerable<T> GetSelectedNodesOfType<T>(this TreeTeaView treeView) where T : TreeNode
+        {
+            return treeView.SelectedNodes.OfType<T>();
+        }
+
+        /// <summary>
         /// Checks whether the currently selected node is of type T
         /// </summary>
         /// <typeparam name="T">Must be derived class of TreeNode</typeparam>
@@ -101,7 +117,20 @@ namespace TreeTea
         /// <returns>True if the selected node is of type T</returns>
         public static bool IsSelectedNodeOfType<T>(this TreeView treeView) where T : TreeNode
         {
+            if (treeView is TreeTeaView)
+                return ((TreeTeaView)treeView).SelectedNode is T;
             return treeView.SelectedNode is T;
+        }
+
+        /// <summary>
+        /// Checks whether all currently selected nodes are of type T
+        /// </summary>
+        /// <typeparam name="T">Must be derived class of TreeNode</typeparam>
+        /// <param name="treeView"></param>
+        /// <returns>True if the selected node is of type T</returns>
+        public static bool IsSelectedNodesOfType<T>(this TreeTeaView treeView) where T : TreeNode
+        {
+            return treeView.SelectedNodes.All((node) => node is T);
         }
 
         #endregion
@@ -157,9 +186,11 @@ namespace TreeTea
         /// <exception cref="InvalidCastException">If the cast fails</exception>
         public static T GetSelectedTag<T>(this TreeView self)
         {
-            if (!(self.SelectedNode?.Tag is T))
-                return default(T);
-            return (T)self.SelectedNode?.Tag;
+            if (self is TreeTeaView && ((TreeTeaView)self).SelectedNode?.Tag is T)
+                return (T)((TreeTeaView)self).SelectedNode?.Tag;
+            else if (!(self.SelectedNode?.Tag is T))
+                return (T)self.SelectedNode?.Tag;
+            return default(T);
         }
 
         /// <summary>
@@ -171,14 +202,19 @@ namespace TreeTea
         /// <returns>True if the Tag of the selected node is of type T</returns>
         public static bool GetSelectedTag<T>(this TreeView self, out T data)
         {
-            if (!(self.SelectedNode?.Tag is T))
+            if (self is TreeTeaView && ((TreeTeaView)self).SelectedNode?.Tag is T)
             {
-                data = default(T);
-                return false;
+                data = (T)((TreeTeaView)self).SelectedNode?.Tag;
+                return true;
+            }
+            else if (self.SelectedNode?.Tag is T)
+            {
+                data = (T)self.SelectedNode?.Tag;
+                return true;
             }
 
-            data = (T)self.SelectedNode?.Tag;
-            return true;
+            data = default(T);
+            return false;
         }
 
         /// <summary>
@@ -189,6 +225,8 @@ namespace TreeTea
         /// <returns></returns>
         public static bool IsSelectedTagOfType<T>(this TreeView self)
         {
+            if (self is TreeTeaView)
+                return (((TreeTeaView)self).SelectedNode?.Tag is T);
             return (self.SelectedNode?.Tag is T);
         }
 
@@ -200,7 +238,7 @@ namespace TreeTea
         /// <typeparam name="T"></typeparam>
         /// <param name="self"></param>
         /// <returns>Returns only the tags, where the tag actually is of type T</returns>
-        public static IEnumerable<T> GetSelectedTag<T>(this TreeTeaView self)
+        public static IEnumerable<T> GetSelectedTags<T>(this TreeTeaView self)
         {
             List<T> data = new List<T>();
             foreach (TreeNode node in self.SelectedNodes)
@@ -216,7 +254,7 @@ namespace TreeTea
         /// <param name="self"></param>
         /// <param name="data"></param>
         /// <returns>True if all the Tags of the selected nodes are of type T</returns>
-        public static bool GetSelectedTag<T>(this TreeTeaView self, out IEnumerable<T> data)
+        public static bool GetSelectedTags<T>(this TreeTeaView self, out IEnumerable<T> data)
         {
             List<T> tmp = new List<T>();
             bool allSuccessfullyCasted = true;
@@ -237,7 +275,7 @@ namespace TreeTea
         /// <typeparam name="T"></typeparam>
         /// <param name="self"></param>
         /// <returns></returns>
-        public static bool IsSelectedTagOfType<T>(this TreeTeaView self)
+        public static bool IsSelectedTagsOfType<T>(this TreeTeaView self)
         {
             return self.SelectedNodes.All(x => x.Tag is T);
         }
@@ -268,12 +306,18 @@ namespace TreeTea
         /// <returns></returns>
         public static bool GetSelectedTagOfAncestor<T>(this TreeView self, out T data, bool searchNodeItself = true)
         {
-            if (self.SelectedNode == null)
+            if (self.SelectedNode == null && !(self is TreeTeaView))
             {
                 data = default(T);
                 return false;
             }
-            data = self.SelectedNode.GetAncestorTag<T>(searchNodeItself);
+
+            if (self is TreeTeaView && ((TreeTeaView)self).SelectedNode != null)
+                data = ((TreeTeaView)self).SelectedNode.GetAncestorTag<T>(searchNodeItself);
+            else if (self.SelectedNode != null)
+                data = self.SelectedNode.GetAncestorTag<T>(searchNodeItself);
+            else
+                data = default(T);
             return data != null;
         }
 
@@ -298,7 +342,7 @@ namespace TreeTea
                     n = n.Parent;
 
                 if (n is T)
-                    return (T)self;
+                    return (T)n;
 
                 if (searchNodeItself)
                     n = n.Parent;
@@ -337,13 +381,15 @@ namespace TreeTea
                 if (!searchNodeItself)
                     n = n.Parent;
 
-                if (n is T)
-                    return (T)self.Tag;
+                if (n.Tag is T)
+                    return (T)n.Tag;
 
                 if (searchNodeItself)
                     n = n.Parent;
             }
 
+            if (n.Tag is T)
+                return (T)n.Tag;
             return default(T);
         }
 
@@ -385,6 +431,8 @@ namespace TreeTea
                     node = node.Parent;
             }
 
+            if (query(node))
+                return (T)node;
             return null;
         }
 
@@ -403,15 +451,39 @@ namespace TreeTea
         }
 
         /// <summary>
+        /// Searches the Ancestors of this node for a Node of the given Type.
+        /// </summary>
+        /// <param name="self"></param>
+        /// <param name="query">Query to search the parents for</param>
+        /// <param name="searchNodeItself">If this is true, and the node this method is called upon is the type that is searched for, the node itself will be returned</param>
+        /// <returns>Null, if no Parent of the given Type could be found</returns>
+        public static TreeNode GetAncestorWhere(this TreeNode self, Func<TreeNode, bool> query, bool searchNodeItself = false)
+        {
+            return GetAncestorWhere<TreeNode>(self, query, searchNodeItself);
+        }
+
+        /// <summary>
+        /// Searches the Ancestors of this node for a Node of the given Type.
+        /// </summary>
+        /// <param name="self"></param>
+        /// <param name="query">Query to search the parents for</param>
+        /// <param name="searchNodeItself">If this is true, and the node this method is called upon is the type that is searched for, the node itself will be returned</param>
+        /// <returns>Null, if no Parent of the given Type could be found</returns>
+        public static bool GetAncestorWhere(this TreeNode self, Func<TreeNode, bool> query, out TreeNode node, bool searchNodeItself = false)
+        {
+            return GetAncestorWhere<TreeNode>(self, query, out node, searchNodeItself);
+        }
+
+        /// <summary>
         /// Searches the Descendents of this nodecollection for all Nodes of the given Type.
         /// </summary>
         /// <typeparam name="T">Must be a derivate of TreeNode</typeparam>
         /// <param name="self"></param>
         /// <param name="includeSelf">If true, it will also include the node itself - as long as it qualifies to</param>
         /// <returns>Null, if no Parent of the given Type could be found</returns>
-        public static IEnumerable<T> Descendants<T>(this TreeNodeCollection self, bool includeSelf = false) where T : TreeNode
+        public static IEnumerable<T> Descendants<T>(this TreeNodeCollection self) where T : TreeNode
         {
-            return Descendants<T>(self, null, includeSelf);
+            return Descendants<T>(self, null);
         }
 
         /// <summary>
@@ -422,13 +494,25 @@ namespace TreeTea
         /// <param name="query">Query to for which the Node has to return true to qualify</param>
         /// <param name="includeSelf">If true, it will also include the node itself - as long as it qualifies to</param>
         /// <returns>Null, if no Parent of the given Type could be found</returns>
-        public static IEnumerable<T> Descendants<T>(this TreeNodeCollection self, Func<TreeNode, bool> query, bool includeSelf = false) where T : TreeNode
+        public static IEnumerable<T> Descendants<T>(this TreeNodeCollection self, Func<TreeNode, bool> query) where T : TreeNode
         {
             foreach (TreeNode node in self)
             {
-                foreach (var descendent in node.Descendants<T>(query, includeSelf))
+                foreach (var descendent in node.DescendantsRec<T>(query))
                     yield return descendent;
             }
+        }
+
+        /// <summary>
+        /// Searches the Descendents of this nodecollection for all Nodes of the given Type.
+        /// </summary>
+        /// <typeparam name="T">Must be a derivate of TreeNode</typeparam>
+        /// <param name="self"></param>
+        /// <param name="includeSelf">If true, it will also include the node itself - as long as it qualifies to</param>
+        /// <returns>Null, if no Parent of the given Type could be found</returns>
+        public static IEnumerable<T> Descendants<T>(this TreeNode self) where T : TreeNode
+        {
+            return Descendants<T>(self.Nodes, null);
         }
 
         /// <summary>
@@ -437,23 +521,40 @@ namespace TreeTea
         /// <typeparam name="T">Must be a derivate of TreeNode</typeparam>
         /// <param name="self"></param>
         /// <returns>Null, if no Parent of the given Type could be found</returns>
-        private static IEnumerable<T> Descendants<T>(this TreeNode self, Func<TreeNode, bool> query, bool includeSelf = false) where T : TreeNode
+        public static IEnumerable<T> Descendants<T>(this TreeNode self, Func<TreeNode, bool> query) where T : TreeNode
+        {
+            return Descendants<T>(self.Nodes, query);
+        }
+
+        /// <summary>
+        /// Searches the Descendents of this node for a Node of the given Type.
+        /// </summary>
+        /// <typeparam name="T">Must be a derivate of TreeNode</typeparam>
+        /// <param name="self"></param>
+        /// <returns>Null, if no Parent of the given Type could be found</returns>
+        private static IEnumerable<T> DescendantsRec<T>(this TreeNode self, Func<TreeNode, bool> query) where T : TreeNode
         {
             var list = new List<T>();
             if (self is T && (query?.Invoke(self) ?? true))
                 list.Add((T)self);
 
-            list.AddRange(self.Nodes.Descendants<T>(query, true));
+            list.AddRange(self.Nodes.Descendants<T>(query));
             return list;
         }
 
         #endregion
     }
 
+    #region Enumerations
+
     /// <summary>
     /// Defines the current checked state of a node
     /// </summary>
     public enum CheckedState { Uninitialised = -1, Unchecked = 0, Checked = 1, Mixed = 2 }
+
+    #endregion
+
+    #region Event-Args
 
     /// <summary>
     /// EventArgs for the TreeTeaView.AfterCheck Event
@@ -502,14 +603,45 @@ namespace TreeTea
         public List<TreeNode> AllSelectedNodes { get; set; }
 
         /// <summary>
+        /// The type of System.Windows.Forms.TreeViewAction that raised the event.
+        /// </summary>
+        public TreeViewAction Action { get; set; }
+
+        /// <summary>
         /// Constructor
         /// </summary>
         /// <param name="lastSelectedNode"></param>
         /// <param name="selectedNodes"></param>
-        public NodeSelectedEventArgs(TreeNode lastSelectedNode, List<TreeNode> selectedNodes)
+        /// <param name="action"></param>
+        public NodeSelectedEventArgs(TreeNode lastSelectedNode, List<TreeNode> selectedNodes, TreeViewAction action)
         {
             this.RecentlySelectedNode = lastSelectedNode;
             this.AllSelectedNodes = selectedNodes;
+            this.Action = action;
         }
     }
+
+    /// <summary>
+    /// EventArgs for the NodeSelectedCancel event
+    /// </summary>
+    public class NodeSelectedCancelEventArgs : System.ComponentModel.CancelEventArgs
+    {
+        /// <summary>
+        /// The type of System.Windows.Forms.TreeViewAction that raised the event.
+        /// </summary>
+        public TreeViewAction Action { get; set; }
+
+        /// <summary>
+        /// Constructor
+        /// </summary>
+        /// <param name="action"></param>
+        /// <param name="cancel"></param>
+        public NodeSelectedCancelEventArgs(bool cancel, TreeViewAction action)
+        {
+            this.Action = action;
+            this.Cancel = cancel;
+        }
+    }
+
+    #endregion
 }
